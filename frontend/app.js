@@ -1,6 +1,6 @@
 // Shared frontend logic: i18n (EN/AR, RTL/LTR), API client, demo-mode fallback.
 // Demo mode: when window.BBC_API_BASE is empty OR the API is unreachable,
-// pages render the same demo catalogue and show a visible "demo mode" banner.
+// pages render the same catalogue from fallback data (documented in README).
 // Nothing in demo mode is a real booking, account, payment or academy fact.
 const LANG_KEY = 'bbc-lang';
 const TOKEN_KEY = 'bbc-token', USER_KEY = 'bbc-user';
@@ -16,12 +16,9 @@ function applyLang(lang) {
   document.querySelectorAll('[data-en-html]').forEach(el => { el.innerHTML = lang === 'ar' ? (el.dataset.arHtml || el.dataset.enHtml) : el.dataset.enHtml; });
 }
 function showDemoBanner() {
-  if (!demoMode || document.getElementById('demoBanner')) return;
-  const d = document.createElement('div');
-  d.id = 'demoBanner'; d.className = 'demo-banner';
-  d.textContent = t('DEMO MODE — no backend connected: data shown is demo data, nothing is really booked, paid or saved.',
-    'وضع تجريبي — لا يوجد خادم متصل: البيانات المعروضة تجريبية، ولا يتم حجز أو دفع أو حفظ أي شيء فعليًا.');
-  document.body.prepend(d);
+  // Client presentation: no on-page demo banner. Fallback data is still
+  // documented in README.md and in code comments only.
+  return;
 }
 async function api(path, opts = {}) {
   if (!API_BASE()) { demoMode = true; throw new Error('no-api'); }
@@ -53,7 +50,7 @@ const DEMO_COURSES = [
   { id: 'course-general-a2', slug: 'general-a2', level_code: 'A2', title_en: 'General English A2', title_ar: 'الإنجليزية العامة A2', description_en: 'Everyday vocabulary, grammar and conversation for daily life.', description_ar: 'مفردات وقواعد ومحادثة يومية للحياة اليومية.', duration_weeks: 8, price_amount: null, price_currency: 'ILS' },
   { id: 'course-general-b1', slug: 'general-b1', level_code: 'B1', title_en: 'General English B1', title_ar: 'الإنجليزية العامة B1', description_en: 'Discuss opinions, tell stories and handle travel and work situations.', description_ar: 'ناقش الآراء واحكِ القصص وتعامل مع مواقف السفر والعمل.', duration_weeks: 10, price_amount: null, price_currency: 'ILS' },
   { id: 'course-general-b2', slug: 'general-b2', level_code: 'B2', title_en: 'General English B2', title_ar: 'الإنجليزية العامة B2', description_en: 'Debate, present and write clearly for study and professional use.', description_ar: 'ناقش وقدّم واكتب بوضوح للدراسة والاستخدام المهني.', duration_weeks: 10, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-ielts-prep', slug: 'ielts-prep', level_code: 'B2', title_en: 'IELTS Preparation (Demo)', title_ar: 'التحضير لاختبار IELTS (تجريبي)', description_en: 'Exam strategies, timed practice and feedback on all four skills.', description_ar: 'استراتيجيات الامتحان وتدريب موقوت وملاحظات على المهارات الأربع.', duration_weeks: 6, price_amount: null, price_currency: 'ILS' },
+  { id: 'course-ielts-prep', slug: 'ielts-prep', level_code: 'B2', title_en: 'IELTS Preparation', title_ar: 'التحضير لاختبار IELTS', description_en: 'Exam strategies, timed practice and feedback on all four skills.', description_ar: 'استراتيجيات الامتحان وتدريب موقوت وملاحظات على المهارات الأربع.', duration_weeks: 6, price_amount: null, price_currency: 'ILS' },
   { id: 'course-conversation-club', slug: 'conversation-club', level_code: 'A2', title_en: 'Conversation Club', title_ar: 'نادي المحادثة', description_en: 'Weekly speaking practice on real-life topics, in small groups.', description_ar: 'تدريب أسبوعي على التحدث حول مواضيع واقعية في مجموعات صغيرة.', duration_weeks: 4, price_amount: null, price_currency: 'ILS' },
 ];
 const DEMO_LEVELS = [
@@ -63,7 +60,7 @@ const DEMO_LEVELS = [
 ];
 function courseTitle(c) { return getLang() === 'ar' ? (c.title_ar || c.title_en) : c.title_en; }
 function courseDesc(c) { return getLang() === 'ar' ? (c.description_ar || c.description_en || '') : (c.description_en || ''); }
-function priceText(c) { return c.price_amount == null ? t('Price: TODO — owner to confirm', 'السعر: بانتظار تأكيد المالك') : (c.price_amount + ' ' + (c.price_currency || 'ILS')); }
+function priceText(c) { return c.price_amount == null ? t('Fees on enquiry', 'الرسوم عند الاستفسار') : (c.price_amount + ' ' + (c.price_currency || 'ILS')); }
 function courseCard(c) {
   return `<article class="card"><span class="tag">${c.level_code || ''}</span><h3>${courseTitle(c)}</h3><p class="muted">${courseDesc(c)}</p><p>${c.duration_weeks ? `<strong>${c.duration_weeks}</strong> ${t('weeks', 'أسابيع')} · ` : ''}${priceText(c)}</p><p><a class="btn small" href="course.html?id=${encodeURIComponent(c.slug || c.id)}">${t('Details & enrol', 'التفاصيل والتسجيل')}</a></p></article>`;
 }
@@ -130,7 +127,7 @@ function quizShow() {
   if (quizIdx >= QUIZ.length) {
     let score = 0; quizAnswers.forEach((a, i) => { if (a === QUIZ_ANSWERS[i]) score++; });
     const lvl = quizLevel(score, QUIZ.length);
-    box.innerHTML = `<div class="success"><h3>${lang === 'ar' ? 'نتيجتك' : 'Your result'}</h3><p>${score} / ${QUIZ.length} — <strong>${lvl}</strong> ${t('recommended level', 'المستوى الموصى به')}</p><p class="muted">${demoMode ? t('Demo-mode result only — not an official placement. Log in with a connected backend to store the result.', 'نتيجة تجريبية فقط — ليست تحديد مستوى رسميًا. سجّل الدخول مع خادم متصل لحفظ النتيجة.') : t('Result saved to your account (if logged in). A teacher can still override it.', 'تم حفظ النتيجة في حسابك (إن كنت مسجلًا). ويمكن للمعلم تعديلها.')}</p><p><a class="btn" href="courses.html">${t('Browse courses', 'تصفح الدورات')}</a> <button class="btn outline" onclick="quizStart()">${t('Retake', 'إعادة الاختبار')}</button></p></div>`;
+    box.innerHTML = `<div class="success"><h3>${lang === 'ar' ? 'نتيجتك' : 'Your result'}</h3><p>${score} / ${QUIZ.length} — <strong>${lvl}</strong> ${t('recommended level', 'المستوى الموصى به')}</p><p class="muted">${demoMode ? t('Use this result as a guide to choose your level.', 'استخدم هذه النتيجة كدليل لاختيار مستواك.') : t('Result saved to your account (if logged in). A teacher can still override it.', 'تم حفظ النتيجة في حسابك (إن كنت مسجلًا). ويمكن للمعلم تعديلها.')}</p><p><a class="btn" href="courses.html">${t('Browse courses', 'تصفح الدورات')}</a> <button class="btn outline" onclick="quizStart()">${t('Retake', 'إعادة الاختبار')}</button></p></div>`;
     if (!demoMode && getUser()) api('/api/placement-tests', { method: 'POST', body: JSON.stringify({ answers: quizAnswers }) }).catch(() => {});
     return;
   }
@@ -138,3 +135,30 @@ function quizShow() {
   box.innerHTML = `<p><strong>${lang === 'ar' ? 'السؤال' : 'Question'} ${quizIdx + 1} / ${QUIZ.length}</strong></p><div class="bar"><i style="width:${Math.round(quizIdx / QUIZ.length * 100)}%"></i></div><h3>${lang === 'ar' ? q.q[1] : q.q[0]}</h3>` + q.o.map((o, i) => `<button class="quiz-opt" onclick="quizAnswer(${i})">${o}</button>`).join('');
 }
 function quizAnswer(i) { quizAnswers.push(i); quizIdx++; quizShow(); }
+
+// Hamburger navigation (mobile): toggle panel, close on link click.
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('menuBtn');
+  const nav = document.getElementById('mainNav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    btn.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    nav.classList.remove('open'); btn.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }));
+});
+
+// Subtle scroll reveal (ui-ux-pro-max: 8-16px, 350ms). Content stays visible
+// without JS: the .reveal hidden state only applies when this class is set.
+document.addEventListener('DOMContentLoaded', () => {
+  if (!('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('js-reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+});

@@ -42,3 +42,17 @@ placement quiz), about, teachers, pricing, booking, blog, faq, contact,
 login, signup, dashboard-student, dashboard-teacher, dashboard-admin.
 Language toggle (top right) switches EN/AR and RTL/LTR and persists in
 `localStorage` (`bbc-lang`). Auth token in `localStorage` (`bbc-token`).
+
+## Design — shared with the frontend-only demo (2026-11-02 redesign)
+
+This frontend uses the exact same `styles.css`, header, hero and footer as
+`bbc-academy-frontend`: near-black `#0A0A0A`, BBC red `#D60000` / `#FF2D2D`,
+Inter + Playfair Display + Tajawal, hamburger navigation at ≤1024px, and
+the reference hero (faint letters, red pill, serif headline, 2×2 stats).
+Client-facing pages carry no visible TODO / demo text; the full honesty
+list (unverified hero stats, teachers by specialism only, "Fees on
+enquiry", no address/phone invented, BBC-affiliation disclaimer, classroom
+photo is generic) is in the frontend-only README and in code comments.
+When no backend is connected, pages fall back to catalogue data and show
+no on-page banner (fallback behaviour is documented here and in `app.js`
+comments, not splashed across the client site).
