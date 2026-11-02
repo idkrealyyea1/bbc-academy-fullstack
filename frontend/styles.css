@@ -215,3 +215,22 @@ footer .footer-grid{padding-bottom:48px}
 .final-cta p{color:var(--gray);max-width:560px;margin:0 auto 32px}
 html.js-reveal .reveal{opacity:0;transform:translateY(12px);transition:opacity .35s ease,transform .35s ease}
 html.js-reveal .reveal.is-visible{opacity:1;transform:none}
+
+/* --- Fix polish: form spacing, mobile card padding, button hierarchy --- */
+.field{margin-bottom:1.1rem}
+.field label{display:block;font-weight:700}
+.field label span{display:inline-block;margin-bottom:.35rem}
+.field input,.field select,.field textarea{margin-top:0}
+input,select,textarea{font-size:1rem}
+.btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+.btn.outline{border-color:rgba(255,255,255,.35)}
+.card{overflow-wrap:break-word}
+.hero-buttons .btn{padding:.85rem 1.5rem}
+@media(max-width:640px){
+  section{padding:1.4rem 0}
+  .card{padding:1rem}
+  .hero{padding:2.2rem 0}
+  .hero-buttons .btn{width:100%}
+  .wrap{padding:0 .9rem}
+  h1{font-size:1.7rem}
+}

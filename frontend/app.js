@@ -11,7 +11,21 @@ function t(en, ar) { return getLang() === 'ar' ? (ar || en) : en; }
 function applyLang(lang) {
   localStorage.setItem(LANG_KEY, lang);
   document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  document.querySelectorAll('[data-en]').forEach(el => { el.textContent = lang === 'ar' ? (el.dataset.ar || el.dataset.en) : el.dataset.en; });
+  // HARDENING: never rewrite an element that contains form controls or child
+  // elements — textContent replacement on such an element DESTROYS its
+  // children (this once deleted every <input> inside form labels).
+  document.querySelectorAll('[data-en]').forEach(el => {
+    if (el.querySelector('input,select,textarea')) return;
+    if (el.children.length) return;
+    el.textContent = lang === 'ar' ? (el.dataset.ar || el.dataset.en) : el.dataset.en;
+  });
+  if (typeof window.__onLangChange==='function') window.__onLangChange(lang);
+  document.querySelectorAll('[data-alt-en]').forEach(el=>{
+    el.alt = lang==='ar' ? (el.dataset.altAr||el.dataset.altEn) : el.dataset.altEn;
+  });
+  document.querySelectorAll('[data-ph-en]').forEach(el => {
+    el.placeholder = lang === 'ar' ? (el.dataset.phAr || el.dataset.phEn) : el.dataset.phEn;
+  });
   const b = document.getElementById('langBtn'); if (b) b.textContent = lang === 'ar' ? 'English' : 'العربية';
   document.querySelectorAll('[data-en-html]').forEach(el => { el.innerHTML = lang === 'ar' ? (el.dataset.arHtml || el.dataset.enHtml) : el.dataset.enHtml; });
 }
