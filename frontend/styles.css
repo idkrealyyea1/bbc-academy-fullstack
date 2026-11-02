@@ -607,6 +607,8 @@ html[dir="rtl"] .cta-arrow{transform:scaleX(-1)}
   z-index: -1;
   inset: 0;
   background: url('academy-reference-hero.jpg') left center / auto 100% no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 85%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 85%);
   filter: brightness(.82) saturate(.93);
 }
 
@@ -615,7 +617,7 @@ html[dir="rtl"] .cta-arrow{transform:scaleX(-1)}
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, transparent 0%, rgba(3, 24, 62, .08) 40%, rgba(3, 24, 62, .84) 59%, #03183e 78%),
+    linear-gradient(90deg, transparent 0%, rgba(3, 24, 62, .08) 25%, rgba(3, 24, 62, .30) 42%, rgba(3, 24, 62, .62) 58%, rgba(3, 24, 62, .90) 72%, #03183e 88%),
     linear-gradient(0deg, rgba(2, 18, 48, .82) 0%, transparent 30%, transparent 82%, rgba(3, 24, 62, .08) 100%);
 }
 
@@ -1158,8 +1160,8 @@ html[dir="ltr"] .reference-page .reference-hero-cta { margin-left:0; margin-righ
 .reference-page[dir='ltr'] .reference-cta-arrow svg,
 html[dir="ltr"] .reference-page .reference-cta-arrow svg { transform:rotate(180deg); }
 .reference-page[dir='ltr'] .reference-hero-photo,
-html[dir="ltr"] .reference-page .reference-hero-photo { background-position:right center; }
+html[dir="ltr"] .reference-page .reference-hero-photo { background-position:right center; -webkit-mask-image: linear-gradient(270deg, #000 0%, #000 45%, transparent 85%); mask-image: linear-gradient(270deg, #000 0%, #000 45%, transparent 85%); }
 .reference-page[dir='ltr'] .reference-hero-photo::after,
-html[dir="ltr"] .reference-page .reference-hero-photo::after { background: linear-gradient(270deg, transparent 0%, rgba(3,24,62,.08) 40%, rgba(3,24,62,.84) 59%, #03183e 78%), linear-gradient(0deg, rgba(2,18,48,.82) 0%, transparent 30%, transparent 82%, rgba(3,24,62,.08) 100%); }
+html[dir="ltr"] .reference-page .reference-hero-photo::after { background: linear-gradient(270deg, transparent 0%, rgba(3,24,62,.08) 25%, rgba(3,24,62,.30) 42%, rgba(3,24,62,.62) 58%, rgba(3,24,62,.90) 72%, #03183e 88%), linear-gradient(0deg, rgba(2,18,48,.82) 0%, transparent 30%, transparent 82%, rgba(3,24,62,.08) 100%); }
 @media (max-width:360px){ .reference-page[dir='ltr'] .reference-hero-copy, html[dir="ltr"] .reference-page .reference-hero-copy { left:3.5%; right:auto; } }
 @media (min-width:700px){ .reference-page[dir='ltr'] .reference-hero-copy, html[dir="ltr"] .reference-page .reference-hero-copy { left:7%; right:auto; } }
