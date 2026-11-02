@@ -253,11 +253,11 @@ input,select,textarea{font-size:1rem}
 .home-header nav.main .nav-cta{display:flex;flex-direction:column;gap:10px;padding:14px 28px}
 .home-header nav.main .nav-cta .btn{width:100%}
 .home-hero{position:relative;width:100vw;margin-inline:calc(50% - 50vw);padding:0;overflow:hidden;min-height:640px;background:#0b2249}
-.home-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:32% 38%}
+.home-hero-img{position:absolute;top:0;bottom:0;height:100%;object-fit:cover;object-position:32% 38%}html[dir="rtl"] .home-hero-img{inset-inline-start:0;width:100%}html[dir="ltr"] .home-hero-img{inset-inline-start:0;width:150%;max-width:none}
 html[dir="ltr"] .home-hero-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,20,45,.92) 0%,rgba(5,20,45,.75) 30%,rgba(5,20,45,.25) 55%,rgba(5,20,45,0) 72%),linear-gradient(to top,rgba(10,10,10,.35),transparent 42%)}
 html[dir="rtl"] .home-hero-shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(5,20,45,.92) 0%,rgba(5,20,45,.75) 30%,rgba(5,20,45,.25) 55%,rgba(5,20,45,0) 72%),linear-gradient(to top,rgba(10,10,10,.35),transparent 42%)}
 .home-hero-copy{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:88px 24px 150px;display:flex;flex-direction:column;align-items:flex-start}
-.home-h1{font-family:'Tajawal','Inter',sans-serif;font-weight:800;font-size:clamp(2.5rem,8.5vw,4.2rem);line-height:1.22;margin-bottom:10px;max-width:560px}
+.home-h1{font-family:'Tajawal','Inter',sans-serif;font-weight:800;font-size:clamp(2.5rem,8.5vw,4.2rem);line-height:1.22;margin-bottom:10px;max-width:560px;text-shadow:0 2px 14px rgba(0,0,0,.65)}
 html[dir="ltr"] .home-h1{font-family:'Playfair Display',Georgia,serif;font-weight:900}
 .home-h1-red{color:#ff2d2d}
 .home-subline{font-size:clamp(1.15rem,4vw,1.6rem);font-weight:800;margin-bottom:18px;max-width:560px}
