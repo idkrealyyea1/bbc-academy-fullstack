@@ -356,3 +356,30 @@ html[dir="ltr"] .home-h1{font-family:'Playfair Display',Georgia,serif;font-weigh
   .home-story-photo img{aspect-ratio:16/10}
   .home-reg-form{padding:20px 16px}
 }
+
+/* STACKED/SPLIT HERO — no text over photo (replaces floating-card hero) */
+.home-hero{display:flex;flex-direction:column;align-items:stretch;min-height:0;border-radius:0}
+.home-hero-img{position:static;flex:none;width:100%;height:400px;object-fit:cover;object-position:32% 38%}
+html[dir="rtl"] .home-hero-img{width:100%;max-width:100%}
+html[dir="ltr"] .home-hero-img{width:150%;max-width:none;align-self:flex-start}
+.home-hero-shade{display:none!important}
+.home-hero-copy{position:static;z-index:auto;width:100%;max-width:none;margin:0;padding:28px 24px;display:flex;flex-direction:column;align-items:flex-start;background:#0b2249;border:0;border-radius:0;box-shadow:none}
+.home-features-grid{margin-top:0}
+.home-features{padding-top:20px}
+@media(min-width:1025px){
+  .home-hero{flex-direction:row-reverse;min-height:560px}
+  html[dir="ltr"] .home-hero-img,html[dir="rtl"] .home-hero-img{width:50%;max-width:50%;height:auto;align-self:stretch;flex:none;object-position:32% 38%}
+  .home-hero-copy{width:50%;flex:none;justify-content:center;padding:48px 40px}
+}
+
+/* Design-repo refinement (ui-ux-pro-max-skill): 8dp spacing tiers, hierarchy margins, body line-height 1.5-1.75, CTA touch spacing */
+.home-hero-copy{padding:32px 24px}
+.home-ctas{gap:16px}
+.home-h1{margin-bottom:16px}
+.home-subline{margin-bottom:24px}
+.home-lead{margin-bottom:32px;line-height:1.7}
+.home-features{padding-top:24px}
+@media(min-width:1025px){
+  .home-hero{height:600px;min-height:600px}
+  html[dir="ltr"] .home-hero-img,html[dir="rtl"] .home-hero-img{height:100%}
+}
