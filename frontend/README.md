@@ -56,3 +56,17 @@ photo is generic) is in the frontend-only README and in code comments.
 When no backend is connected, pages fall back to catalogue data and show
 no on-page banner (fallback behaviour is documented here and in `app.js`
 comments, not splashed across the client site).
+
+## Homepage (new reference, index.html only)
+Same homepage as the frontend-only demo: navy top bar with centred BBC logo, full-bleed photo hero (`hero-home.jpg`), stacked CTAs, 3-feature card and 3-stat card. Other pages keep the dark/red identity.
+**Homepage stats (+10,000 students, 95% success rate, 5.0 student rating) are design placeholders from the reference screenshot — NOT verified facts. Owner must confirm/correct before public launch.**
+
+## Homepage placeholders (owner must replace before public launch)
+- Hero stats (+10,000 / 95% / 5.0) are the figures from the reference screenshot
+  and are NOT verified academy figures — the owner must confirm or correct them.
+- Teacher photos on the homepage are illustrative AI-generated placeholders
+  (specialism only, no invented names or bios). Replace them with real staff
+  photos, with each teacher's consent, before launch.
+- The homepage registration form is a demo form in the frontend-only build:
+  it shows a success message and does not send or store anything. The
+  full-stack build is where real submissions belong.

@@ -234,3 +234,113 @@ input,select,textarea{font-size:1rem}
   .wrap{padding:0 .9rem}
   h1{font-size:1.7rem}
 }
+
+/* ---------- Homepage: new reference (navy top bar + photo hero) ---------- */
+/* Index only: classes are .home-* so no other page is affected. */
+.home-header{background:#0b2249;border-bottom:1px solid rgba(255,255,255,.12)}
+.home-topbar{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;height:72px}
+.home-logo{position:absolute;left:50%;transform:translateX(-50%);text-align:center}
+.home-header .logo-sub{color:#c7d2e0}
+.home-start{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#d60000,#ff2d2d);color:#fff;padding:10px 18px;border-radius:999px;font-weight:800;font-size:.9rem;box-shadow:0 4px 18px rgba(214,0,0,.4);white-space:nowrap}
+.home-start svg{width:18px;height:18px;flex-shrink:0}
+.home-start:hover{color:#fff;transform:translateY(-1px)}
+.home-side{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.home-header .hamburger{display:flex}
+.home-header nav.main{position:fixed;top:72px;inset-inline:0;background:#0a0a0a;max-height:calc(100vh - 72px);overflow-y:auto;flex-direction:column;align-items:stretch;gap:0;padding:12px 0 24px;border-bottom:1px solid var(--border);transform:translateY(-8px);opacity:0;pointer-events:none;transition:transform .3s ease,opacity .3s ease;z-index:999}
+.home-header nav.main.open{transform:translateY(0);opacity:1;pointer-events:auto}
+.home-header nav.main a{padding:12px 28px;font-size:1rem;border-radius:0}
+.home-header nav.main a::after{display:none}
+.home-header nav.main .nav-cta{display:flex;flex-direction:column;gap:10px;padding:14px 28px}
+.home-header nav.main .nav-cta .btn{width:100%}
+.home-hero{position:relative;width:100vw;margin-inline:calc(50% - 50vw);padding:0;overflow:hidden;min-height:640px;background:#0b2249}
+.home-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:28% 42%}
+html[dir="ltr"] .home-hero-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,20,45,.94) 0%,rgba(5,20,45,.78) 36%,rgba(5,20,45,.18) 64%,rgba(5,20,45,0) 80%),linear-gradient(to top,rgba(10,10,10,.55),transparent 42%)}
+html[dir="rtl"] .home-hero-shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(5,20,45,.94) 0%,rgba(5,20,45,.78) 36%,rgba(5,20,45,.18) 64%,rgba(5,20,45,0) 80%),linear-gradient(to top,rgba(10,10,10,.55),transparent 42%)}
+.home-hero-copy{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:88px 24px 150px;display:flex;flex-direction:column;align-items:flex-start}
+.home-h1{font-family:'Tajawal','Inter',sans-serif;font-weight:800;font-size:clamp(2.5rem,8.5vw,4.2rem);line-height:1.22;margin-bottom:10px}
+html[dir="ltr"] .home-h1{font-family:'Playfair Display',Georgia,serif;font-weight:900}
+.home-h1-red{color:#ff2d2d}
+.home-subline{font-size:clamp(1.15rem,4vw,1.6rem);font-weight:800;margin-bottom:18px}
+.home-subline::after{content:'';display:block;width:120px;height:4px;background:var(--red);border-radius:999px;margin-top:10px}
+.home-lead{max-width:560px;color:#dbe4f0;font-size:1.02rem;line-height:1.9;margin-bottom:28px}
+.home-ctas{display:flex;flex-direction:column;gap:14px;width:min(360px,100%)}
+.home-cta-primary{width:100%;padding:16px 28px;font-size:1.05rem;border-radius:14px}
+.btn.outline.home-cta-secondary{width:100%;padding:16px 28px;font-size:1.05rem;border-radius:14px;background:rgba(5,20,45,.72);border:1px solid rgba(255,255,255,.55)}
+.home-features{padding:0 0 8px}
+.home-features-grid{position:relative;z-index:3;margin-top:-72px;display:grid;grid-template-columns:repeat(3,1fr);background:rgba(11,34,73,.85);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.16);border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.45);overflow:hidden}
+.home-feature{padding:22px 16px;text-align:center}
+.home-feature:not(:last-child){border-inline-end:1px solid rgba(255,255,255,.14)}
+.home-feature-icon{display:block;width:34px;height:34px;margin:0 auto 10px;color:#fff}
+.home-feature-icon svg{width:100%;height:100%}
+.home-feature h3{font-family:'Tajawal','Inter',sans-serif;font-size:.98rem;font-weight:800;margin-bottom:2px}
+.home-feature p{color:#c7d2e0;font-size:.86rem;margin:0}
+.home-stats{padding:20px 0 8px}
+.home-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;color:#0b2249;border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.35);overflow:hidden}
+.home-stat{padding:22px 12px;text-align:center}
+.home-stat:not(:last-child){border-inline-end:1px solid #e2e8f0}
+.home-stat-icon{display:block;width:30px;height:30px;margin:0 auto 8px;color:#0b2249}
+.home-stat-icon svg{width:100%;height:100%}
+.home-stat strong{display:block;font-size:1.7rem;font-weight:900;line-height:1.1;color:#0b2249}
+.home-stat span{color:#475569;font-size:.88rem;font-weight:700}
+@media(max-width:640px){
+  .home-topbar{height:64px}
+  .home-header nav.main{top:64px;max-height:calc(100vh - 64px)}
+  .home-logo .logo-bbc{font-size:1.35rem}
+  .home-logo .logo-sub{font-size:.5rem;letter-spacing:.16em}
+  .home-start{padding:8px 14px;font-size:.85rem}
+  .home-hero{min-height:620px}
+  .home-hero-copy{padding:72px 20px 150px}
+  .home-feature{padding:18px 8px}
+  .home-feature h3{font-size:.85rem}
+  .home-feature p{font-size:.78rem}
+  .home-stat strong{font-size:1.35rem}
+  .home-stat span{font-size:.78rem}
+}
+@media(min-width:1025px){
+  .home-hero{min-height:680px}
+  .home-hero-copy{padding:110px 24px 170px}
+}
+
+/* --- Expanded homepage: courses, teachers, story, registration (eye-comfort) --- */
+.home-courses{padding:56px 0 8px}
+.home-view-all{text-align:center;margin-top:22px}
+.home-course-card h3{font-size:1.15rem}
+.home-teachers{padding:56px 0 8px}
+.home-teachers .section-header p{max-width:640px}
+.home-teacher-card{overflow:hidden;padding:0}
+.home-teacher-photo{aspect-ratio:1/1;overflow:hidden;background:#0b2249}
+.home-teacher-photo img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.92) brightness(.96)}
+.home-teacher-card .tag{margin:18px 18px 0}
+.home-teacher-card p{padding:0 18px 20px}
+/* Story: classroom photo as a soft background (low opacity) + solid photo card.
+   Text never sits on the busy photo itself, so contrast stays comfortable. */
+.home-story{position:relative;overflow:hidden;border-radius:24px;margin:56px 0 8px;background:#0b2249}
+.home-story-bg{position:absolute;inset:0;background:url("story-classroom.jpg") center/cover no-repeat;opacity:.16;filter:blur(1px) saturate(.85)}
+.home-story-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,34,73,.55),rgba(11,34,73,.88))}
+.home-story-inner{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;padding:48px 32px}
+.home-story-photo{position:relative;border-radius:20px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.home-story-photo img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:4/3}
+.home-story-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(5,20,45,.45),transparent 55%)}
+.home-story-chip{position:absolute;z-index:2;bottom:16px;inset-inline-start:16px;background:rgba(214,0,0,.92);color:#fff;padding:8px 16px;border-radius:999px;font-weight:800;font-size:.9rem}
+.home-story-text p{color:#dbe4f0}
+.home-story-text .section-title{color:#fff}
+/* Registration: hero photo as background, heavy navy scrim, form in a white card
+   so labels and fields stay crisp and eye-comfortable on any screen. */
+.home-register{position:relative;overflow:hidden;border-radius:24px;margin:56px 0 8px;background:#0b2249}
+.home-register-bg{position:absolute;inset:0;background:url("hero-home.jpg") center 30%/cover no-repeat;opacity:.38}
+.home-register-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(5,20,45,.94) 0%,rgba(5,20,45,.82) 55%,rgba(214,0,0,.28) 100%)}
+.home-register-inner{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1.15fr;gap:32px;padding:48px 32px;align-items:start}
+.home-register-copy .section-title{color:#fff}
+.home-register-copy p{color:#dbe4f0}
+.home-reg-form{background:#fff;color:#0b2249;border-radius:20px;padding:28px;box-shadow:0 18px 50px rgba(0,0,0,.4)}
+.home-reg-form label{color:#0b2249;font-weight:800}
+.home-reg-form input,.home-reg-form select,.home-reg-form textarea{background:#f1f5f9!important;border:1px solid #cbd5e1!important;color:#0b2249!important}
+.home-reg-form input::placeholder,.home-reg-form textarea::placeholder{color:#64748b!important}
+.home-reg-form input:focus,.home-reg-form select:focus,.home-reg-form textarea:focus{border-color:rgba(214,0,0,.6)!important;box-shadow:0 0 0 3px rgba(214,0,0,.15)!important}
+.home-reg-form .btn{width:100%}
+.home-register .success{margin-top:16px}
+@media(max-width:800px){
+  .home-story-inner,.home-register-inner{grid-template-columns:1fr;padding:28px 18px}
+  .home-story-photo img{aspect-ratio:16/10}
+  .home-reg-form{padding:20px 16px}
+}
