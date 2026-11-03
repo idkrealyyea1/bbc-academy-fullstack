@@ -99,4 +99,39 @@
       })();
     }
   });
+
+  // --- Admin dashboard: booking requests + create student account (connected mode only) ---
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!base() || !document.getElementById('bookingRequestsList')) return;
+    var lang2 = localStorage.getItem('bbc-lang') || 'ar';
+    var note = document.getElementById('bookingRequestsNote');
+    async function loadRequests() {
+      var list = document.getElementById('bookingRequestsList');
+      try {
+        var data = await req('/api/admin/booking-requests');
+        if (note) note.hidden = true;
+        var rows = data.booking_requests || [];
+        if (!rows.length) { list.innerHTML = '<p class="muted">' + (lang2 === 'ar' ? 'لا توجد طلبات حجز بعد.' : 'No booking requests yet.') + '</p>'; return; }
+        list.innerHTML = '<table><tr><th>' + (lang2 === 'ar' ? 'الاسم' : 'Name') + '</th><th>' + (lang2 === 'ar' ? 'الدورة' : 'Course') + '</th><th>' + (lang2 === 'ar' ? 'الحالة' : 'Status') + '</th><th></th></tr>' + rows.map(function (r) {
+          return '<tr><td>' + r.full_name + (r.phone ? '<br><small>' + r.phone + '</small>' : '') + (r.source ? '<br><small>' + r.source + '</small>' : '') + '</td><td>' + (r.course || '') + '</td><td>' + r.status + '</td><td>' + (r.status === 'pending' ? '<button class="btn small" data-confirm="' + r.id + '">' + (lang2 === 'ar' ? 'تأكيد' : 'Confirm') + '</button> <button class="btn small outline" data-reject="' + r.id + '">' + (lang2 === 'ar' ? 'رفض' : 'Reject') + '</button>' : '') + '</td></tr>';
+        }).join('') + '</table>';
+        list.querySelectorAll('[data-confirm]').forEach(function (b) { b.addEventListener('click', async function () { await req('/api/admin/booking-requests/' + b.dataset.confirm, { method: 'PUT', body: { status: 'confirmed' } }); loadRequests(); }); });
+        list.querySelectorAll('[data-reject]').forEach(function (b) { b.addEventListener('click', async function () { await req('/api/admin/booking-requests/' + b.dataset.reject, { method: 'PUT', body: { status: 'rejected' } }); loadRequests(); }); });
+      } catch (err) {
+        if (note) note.textContent = (lang2 === 'ar' ? 'تعذّر تحميل طلبات الحجز (سجّل دخولك كمسؤول أولًا).' : 'Could not load booking requests (log in as admin first).');
+      }
+    }
+    loadRequests();
+    var form = document.getElementById('adminCreateAccountForm');
+    if (form) form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var ok = document.getElementById('adminCreateAccountOk');
+      try {
+        var data = await req('/api/auth/register', { method: 'POST', body: { full_name: document.getElementById('newStudentName').value.trim(), email: document.getElementById('newStudentEmail').value.trim(), password: document.getElementById('newStudentPassword').value, role: 'student' } });
+        if (ok) { ok.hidden = false; ok.textContent = (lang2 === 'ar' ? 'تم إنشاء حساب ' : 'Account created for ') + data.user.email + ' ✔'; }
+        form.reset();
+      } catch (err) { alert((lang2 === 'ar' ? 'فشل إنشاء الحساب: ' : 'Account creation failed: ') + err.message); }
+    });
+  });
+
 })();
