@@ -1,6 +1,6 @@
 # BBC English Academy — Full-Stack Platform
 
-**Status: LOCAL BUILD ONLY — not pushed, not deployed, no one contacted.**
+**Status: LIVE 2026-11-03 — Pages: https://bbc-academy.pages.dev/ · API: https://bbc-academy-fullstack.onrender.com · Database: Supabase project `bbc-academy` (migrations 001–004 applied, SEED_DEMO=false).**
 
 A complete learning platform for an English academy: public site, CEFR
 levels, a scored placement test, enrolment, lessons, assignments + grading,

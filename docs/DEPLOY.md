@@ -1,8 +1,8 @@
 # Deploy — BBC English Academy (step by step)
 
-Do NOT push or deploy anything until عمرو / the academy owner has reviewed
-the local build and confirmed the TODOs in the root README. Nothing in this
-repo is published yet.
+LIVE 2026-11-03: Supabase project `bbc-academy`, Render `https://bbc-academy-fullstack.onrender.com`
+(/api/health store: postgres), Cloudflare Pages `https://bbc-academy.pages.dev/` with
+API_BASE_URL set to the Render URL. Migrations 001-004 applied. SEED_DEMO=false in production.
 
 ## 1. Supabase — database
 
@@ -54,7 +54,7 @@ repo is published yet.
    - `CORS_ORIGIN=` — your Cloudflare Pages URL(s), comma-separated, e.g. `https://bbc-academy.pages.dev` (add the custom domain later too).
    - `SEED_DEMO=false` — so demo accounts are NOT created in production.
    - `ADMIN_SETUP_KEY=` — optional, only if you want API admin registration.
-5. Deploy, then verify: open `https://<your-service>.onrender.com/api/health`
+5. Deploy, then verify: open `https://bbc-academy-fullstack.onrender.com/api/health`
    — expect `{ "status": "ok", "store": "postgres", ... }`. If `store` says
    `memory`, `DATABASE_URL` is not set — fix it before going live.
 
@@ -68,7 +68,7 @@ repo is published yet.
    - **Build command:** `node build.js`
    - **Build output directory:** `.` (the frontend folder itself — the files
      are already static; `build.js` only rewrites `config.js`)
-   - **Environment variable:** `API_BASE_URL=https://<your-service>.onrender.com`
+   - **Environment variable:** `API_BASE_URL=https://bbc-academy-fullstack.onrender.com`
      (no trailing slash).
 3. Deploy. Open the Pages URL: the yellow DEMO MODE banner must be **gone**
    (it appears only when no backend answers). Log in with a real account
@@ -85,9 +85,9 @@ repo is published yet.
 ## 4. Smoke checks after deploy
 
 ```bash
-curl https://<render-service>/api/health
-curl https://<render-service>/api/courses
-curl https://<pages-url>/            # 200, no DEMO MODE banner
+curl https://bbc-academy-fullstack.onrender.com/api/health
+curl https://bbc-academy-fullstack.onrender.com/api/courses
+curl https://bbc-academy.pages.dev/            # 200, connected mode (no demo behaviour)
 ```
 
 ## Rollback
