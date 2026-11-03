@@ -30,8 +30,11 @@
   .page-transition { display: none; }
   .pt-panel, .pt-content { transition: none; animation: none; }
 }
-/* JS fallback: hide the overlay as soon as JS is running, if the load
-   handler is still pending. Combined with DOMContentLoaded above. */
-.page-transition { display: block; }
-body.js-ready .page-transition,
+/* The overlay must stay visible until the script opens the doors and adds
+   .pt-hidden. (An earlier "hide as soon as JS runs" rule did exactly what it
+   said — including on every normal page load — so no animation ever played.)
+   For visitors whose JavaScript never runs, a zero-duration keyframe gives up
+   after 6s and reveals the page instead of trapping them behind the panels. */
+.page-transition { display: block; animation: pt-giveup 0s linear 6s forwards; }
 .page-transition.pt-hidden { display: none; }
+@keyframes pt-giveup { to { visibility: hidden; } }
