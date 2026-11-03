@@ -133,7 +133,9 @@
             else if (/conversation/i.test(c.slug)) section = 'conversation';
             else if (/business/i.test(c.slug)) section = 'business';
             else if (/kids|young/i.test(c.slug)) section = 'kids';
-            return { id: c.slug || c.id, en: c.title_en, ar: c.title_ar || c.title_en, desc_en: c.description_en || '', desc_ar: c.description_ar || c.description_en || '', weeks: c.duration_weeks || 0, lessons: null, level: byId[c.level_id] || 'Beginner', section: section };
+            // '' when the course has no level: never default to 'Beginner',
+            // which labelled an IELTS or B2 course as the lowest level.
+            return { id: c.slug || c.id, en: c.title_en, ar: c.title_ar || c.title_en, desc_en: c.description_en || '', desc_ar: c.description_ar || c.description_en || '', weeks: c.duration_weeks || 0, lessons: null, level: byId[c.level_id] || '', section: section };
           });
           if (typeof COURSES !== 'undefined') { COURSES.splice(0, COURSES.length); mapped.forEach(function (c) { COURSES.push(c); }); }
           if (mapped.length) renderCourses(window.__filter || 'all', lang());
@@ -187,7 +189,7 @@
           var c = data.course;
           var levels = await req('/api/levels'); var byId = {};
           (levels.levels || []).forEach(function (l) { byId[l.id] = l.name_en; });
-          var mapped = { id: id, en: c.title_en, ar: c.title_ar || c.title_en, desc_en: c.description_en || '', desc_ar: c.description_ar || c.description_en || '', weeks: c.duration_weeks || 0, lessons: null, level: byId[c.level_id] || 'Beginner', section: 'general' };
+          var mapped = { id: id, en: c.title_en, ar: c.title_ar || c.title_en, desc_en: c.description_en || '', desc_ar: c.description_ar || c.description_en || '', weeks: c.duration_weeks || 0, lessons: null, level: byId[c.level_id] || '', section: 'general' };
           if (typeof COURSES !== 'undefined') { COURSES.splice(0, COURSES.length, mapped); }
           renderCourseDetail(lang());
           mountEnrol(c.id);
@@ -232,7 +234,10 @@
         try {
           var levels = (await req('/api/levels')).levels || [];
           var levelName = document.getElementById('courseLevel').value;
-          var level = levels.find(function (l) { return l.name_en === levelName; });
+          // Case-insensitive: the label is copied from the database, and an
+          // earlier "Upper Intermediate" vs "Upper intermediate" mismatch
+          // silently saved the course with no level at all.
+          var level = levels.find(function (l) { return l.name_en && l.name_en.toLowerCase() === String(levelName).toLowerCase(); });
           await req('/api/courses', { method: 'POST', body: {
             slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || ('course-' + Date.now()),
             title_en: name, title_ar: name, description_en: desc || null,

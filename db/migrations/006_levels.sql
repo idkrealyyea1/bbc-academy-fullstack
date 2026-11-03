@@ -3,7 +3,7 @@
 -- Why this exists: `levels` is the only table the app expects to be pre-filled,
 -- because a course must be filed under a level and the "add course" form matches
 -- on `name_en`. With an empty table every new course lands on level_id NULL and
--- is displayed as "Beginner", and the public level filters match nothing.
+-- carries no level at all, and the public level filters match nothing.
 --
 -- These are CEFR reference names, NOT demo content: no prices, no staff, no
 -- claims about the academy. Safe to run on production. Idempotent, so running it

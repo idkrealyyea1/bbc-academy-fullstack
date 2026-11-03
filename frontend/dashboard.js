@@ -349,7 +349,6 @@
     });
     if (form) form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      var okBox = document.getElementById('adminCreateAccountOk');
       try {
         var created = await api.req('/api/admin/users', { method: 'POST', body: {
           full_name: form.elements.full_name.value.trim(), email: form.elements.email.value.trim(),
@@ -358,10 +357,19 @@
         if (form.elements.course_id.value) {
           await api.req('/api/admin/enrolments', { method: 'POST', body: { student_id: created.user.id, course_id: form.elements.course_id.value, status: 'active' } });
         }
-        if (okBox) { okBox.hidden = false; okBox.textContent = t('Account created for ', 'تم إنشاء حساب ') + created.user.email + ' ✔'; }
-        form.reset();
+        // Reload so the People / enrolments tables include the new student;
+        // the confirmation is carried across the reload in sessionStorage.
+        sessionStorage.setItem('bbc-flash', t('Account created for ', 'تم إنشاء حساب ') + created.user.email + ' ✔');
+        location.reload();
       } catch (err) { alert((lang === 'ar' ? 'فشل إنشاء الحساب: ' : 'Account creation failed: ') + err.message); }
     });
+    // Confirmation from a previous page load (see the submit handler above).
+    var flash = sessionStorage.getItem('bbc-flash');
+    if (flash) {
+      var flashBox = document.getElementById('adminCreateAccountOk');
+      if (flashBox) { flashBox.hidden = false; flashBox.textContent = flash; }
+      sessionStorage.removeItem('bbc-flash');
+    }
   }
 
   document.addEventListener('DOMContentLoaded', function () { boot().catch(function (err) { content.innerHTML = '<p class="api-error">' + h(err.message) + '</p>'; }); });
