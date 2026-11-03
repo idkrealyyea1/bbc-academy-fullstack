@@ -33,6 +33,7 @@
     if (!base()) return;
     // Connected mode: the login demo note is no longer true.
     var note = document.getElementById('loginDemoNote'); if (note) note.hidden = true;
+    document.querySelectorAll('.demo-note').forEach(function (el) { el.hidden = true; });
     // --- Login: real auth, redirect by role ---
     var loginForm = document.querySelector('form[data-mock="loginOk"]');
     if (loginForm) loginForm.addEventListener('submit', async function (e) {
@@ -69,14 +70,14 @@
     if (enrollForm) enrollForm.addEventListener('submit', async function (e) {
       e.preventDefault(); e.stopImmediatePropagation();
       var name = document.querySelector('#name'); var phone = document.querySelector('#phone');
-      var goal = document.querySelector('#goal'); var source = document.querySelector('#source');
+      var goal = document.querySelector('#path') || document.querySelector('#goal'); var source = document.querySelector('#source');
       var message = document.querySelector('#message');
       try {
         await req('/api/booking-requests', { method: 'POST', body: {
           full_name: name ? name.value.trim() : '', phone: phone ? phone.value.trim() : '',
-          course: goal ? goal.value : '', source: source ? source.value : '', message: message ? message.value.trim() : ''
+          course: goal && goal.selectedIndex >= 0 ? goal.options[goal.selectedIndex].text : '', source: source ? source.value : '', message: message ? message.value.trim() : ''
         }});
-        var ok = document.querySelector('#form-success'); if (ok) ok.hidden = false;
+        var ok = document.querySelector('#form-success'); if (ok) { ok.hidden = false; ok.classList.add('visible'); ok.textContent = (lang() === 'ar' ? 'شكرًا لاهتمامك! تم استلام طلبك، وستؤكد الأكاديمية مقعدك قريبًا.' : 'Thanks for your interest! Your request has been received, and the academy will confirm your seat soon.'); }
       } catch (err) { alert((lang() === 'ar' ? 'فشل إرسال الطلب: ' : 'Booking request failed: ') + err.message); }
     });
     // --- Courses: fetch from the API, map to the demo shape, re-render ---
