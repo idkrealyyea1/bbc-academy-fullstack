@@ -6,7 +6,11 @@ production project until the owner has confirmed the demo content is wanted.
 1. `migrations/001_init.sql` — tables, enums, foreign keys, indexes.
 2. `migrations/002_rls.sql` — Row Level Security + policies.
 3. `migrations/003_storage.sql` — Storage buckets for avatars/materials (optional).
-4. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
+4. `migrations/004_booking_requests.sql` — anonymous booking requests.
+5. `migrations/005_fixes.sql` — `booking_requests.email`, one grade row per
+   submission. **Required** by the current API: booking requests send an email
+   and grading upserts into `grades`.
+6. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
    prices are NULL on purpose (TODO for the owner); teacher rows are labelled
    DEMO and must be replaced with real staff.
 
@@ -25,6 +29,8 @@ createdb bbc_academy
 psql bbc_academy < db/migrations/001_init.sql
 psql bbc_academy < db/migrations/002_rls.sql
 psql bbc_academy < db/migrations/003_storage.sql
+psql bbc_academy < db/migrations/004_booking_requests.sql
+psql bbc_academy < db/migrations/005_fixes.sql
 psql bbc_academy < db/supabase/seed.sql
 DATABASE_URL=postgres://localhost:5432/bbc_academy npm --prefix backend start
 ```

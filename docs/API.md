@@ -14,7 +14,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | Public | `{ email, password (≥8), full_name, role?: "student" \| "teacher" }` — `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY` | 201 `{ user, token }` |
+| POST | `/api/auth/register` | Public (20/hour per IP) | `{ email, password (≥8), full_name, role?: "student" }` — the public form is student-only. `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY`; `role: "teacher"` is rejected (teachers must be created by an admin, see `/api/admin/users`) | 201 `{ user, token }` |
 | POST | `/api/auth/login` | Public | `{ email, password }` | `{ user, token }` |
 | GET | `/api/auth/me` | Any role | — | `{ user }` |
 
@@ -26,6 +26,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 |---|---|---|---|---|
 | GET | `/api/profile/me` | Any role | — | `{ user }` |
 | PUT | `/api/profile/me` | Any role | `{ full_name?, phone? }` | `{ user }` |
+| POST | `/api/profile/password` | Any role | `{ current_password, new_password (≥8) }` — wrong `current_password` → 401. Existing tokens stay valid until they expire, the new password applies to the next login | `{ updated: true }` |
 
 ## Levels & Courses
 
@@ -35,14 +36,14 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | GET | `/api/courses` | Public | — | `{ courses: [...] }` |
 | GET | `/api/courses/:id` | Public | id = uuid or slug | `{ course }` |
 | POST | `/api/courses` | teacher, admin | `{ slug, title_en, title_ar?, description_en?, description_ar?, duration_weeks?, level_id?, teacher_id? }` — `price_amount` is always stored NULL (TODO for owner) | 201 `{ course }` |
-| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored) | `{ course }` |
+| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored). `teacher_id` is admin-only (a teacher sending it gets 403) | `{ course }` |
 | DELETE | `/api/courses/:id` | admin | — | `{ deleted: true }` |
 
 ## Lessons
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/api/lessons?course_id=` | Public | — | `{ lessons: [...] }` |
+| GET | `/api/lessons?course_id=` | Logged in | — | `{ lessons: [...] }` (scoped: students see enrolled courses, teachers own courses, admins all) |
 | POST | `/api/lessons` | teacher, admin | `{ course_id, title_en, title_ar?, content_url?, material_url?, live_class_url?, order_no? }` — `live_class_url` is just a meeting link, no built-in video | 201 `{ lesson }` |
 
 ## Enrolments
@@ -65,7 +66,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
 | POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date? }` | 201 `{ assignment }` |
-| GET | `/api/assignments?course_id=` | Public | — | `{ assignments: [...] }` |
+| GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role) |
 | POST | `/api/submissions` | student | `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` |
 | GET | `/api/submissions?assignment_id=` | teacher, admin | — | `{ submissions: [...] }` |
 | POST | `/api/submissions/:id/grade` | teacher, admin | `{ grade: 0-100, feedback? }` | `{ submission }` (also mirrored to `grades`) |
@@ -74,8 +75,9 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/attendance` | teacher, admin | `{ course_id, student_id, lesson_id?, status: "present" \| "absent" \| "late" \| "excused", attended_on? }` | 201 `{ attendance }` |
+| POST | `/api/attendance` | teacher, admin | `{ course_id, student_id, lesson_id?, status: "present" \| "absent" \| "late" \| "excused", attended_on? }` — `attended_on` is `YYYY-MM-DD`; when omitted it defaults to **today in `ACADEMY_TIMEZONE`** (default `Asia/Gaza`), not the server's UTC date | 201 `{ attendance }` |
 | GET | `/api/attendance?course_id=` | teacher, admin | — | `{ attendance: [...] }` |
+| GET | `/api/me/attendance` | Any role | — | `{ attendance: [...] }` (student-only) |
 | POST | `/api/announcements` | teacher, admin | `{ title, body, audience? }` | 201 `{ announcement }` |
 | GET | `/api/announcements` | Public | — | `{ announcements: [...] }` |
 
@@ -91,7 +93,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/booking-requests` | Public | `{ full_name, phone?, course?, source?, message? }` | 201 `{ booking_request }` (status `pending`) |
+| POST | `/api/booking-requests` | Public | `{ full_name, email?, phone?, course?, source?, message? }` — the email field is required for the admin to create the account and contact the applicant | 201 `{ booking_request }` (status `pending`) |
 | GET | `/api/admin/booking-requests` | admin | — | `{ booking_requests: [...] }` |
 | PUT | `/api/admin/booking-requests/:id` | admin | `{ status: "pending" \| "confirmed" \| "rejected" }` | `{ booking_request }` |
 
@@ -102,8 +104,15 @@ The admin confirms a request, then creates the student account — students neve
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
 | GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes) |
+| POST | `/api/admin/users` | admin | `{ email, password (≥8), full_name, role: "student" \| "teacher" \| "admin" }` | 201 `{ user }` |
+| PUT | `/api/admin/users/:id` | admin | `{ full_name?, phone?, role?, password? (≥8, resets the password) }` — an admin cannot remove their own admin role | `{ user }` |
+| POST | `/api/admin/enrolments` | admin | `{ student_id, course_id, status?: "pending" \| "active" \| "completed" \| "cancelled" }` | 201 `{ enrolment }` |
 
-## Demo accounts (local backend only, `SEED_DEMO=true`)
+The admin confirms a booking request and creates the student account here — students never self-register.
+
+## Demo accounts (local backend only, `SEED_DEMO`)
 
 `student@demo.local`, `teacher@demo.local`, `admin@demo.local` — all with
-password `Demo1234!`. Change/disable seeding (`SEED_DEMO=false`) in production.
+password `Demo1234!`. Demo seeding is ON by default when `NODE_ENV` is not
+`production`, and OFF in production unless you set `SEED_DEMO=true`. See
+`docs/DEPLOY.md`.

@@ -2,7 +2,9 @@
 
 LIVE 2026-11-03: Supabase project `bbc-academy`, Render `https://bbc-academy-fullstack.onrender.com`
 (/api/health store: postgres), Cloudflare Pages `https://bbc-academy.pages.dev/` with
-API_BASE_URL set to the Render URL. Migrations 001-004 applied. SEED_DEMO=false in production.
+API_BASE_URL set to the Render URL. Migrations 001-004 applied;
+**005_fixes.sql must be applied** — the current API writes
+`booking_requests.email` and upserts `grades` on `submission_id`. SEED_DEMO=false in production.
 
 ## 1. Supabase — database
 
@@ -15,6 +17,9 @@ API_BASE_URL set to the Render URL. Migrations 001-004 applied. SEED_DEMO=false 
    - `db/migrations/002_rls.sql`
    - `db/migrations/003_storage.sql` (optional but recommended)
    - `db/migrations/004_booking_requests.sql`
+   - `db/migrations/005_fixes.sql` — adds `booking_requests.email` and makes
+     `grades` one row per submission. The API needs both; without it, booking
+     requests and grading fail.
    - `db/supabase/seed.sql` — demo data only. Skip on a production project
      until the owner confirms the demo catalogue is wanted.
 4. **Auth users:** create real users one of these ways (do NOT use the
@@ -54,6 +59,8 @@ API_BASE_URL set to the Render URL. Migrations 001-004 applied. SEED_DEMO=false 
    - `CORS_ORIGIN=` — your Cloudflare Pages URL(s), comma-separated, e.g. `https://bbc-academy.pages.dev` (add the custom domain later too).
    - `SEED_DEMO=false` — so demo accounts are NOT created in production.
    - `ADMIN_SETUP_KEY=` — optional, only if you want API admin registration.
+   - `ACADEMY_TIMEZONE=` — optional, IANA zone used for default dates such as
+     attendance (default `Asia/Gaza`). Set it only if the academy is elsewhere.
 5. Deploy, then verify: open `https://bbc-academy-fullstack.onrender.com/api/health`
    — expect `{ "status": "ok", "store": "postgres", ... }`. If `store` says
    `memory`, `DATABASE_URL` is not set — fix it before going live.

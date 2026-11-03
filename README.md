@@ -1,6 +1,7 @@
 # BBC English Academy — Full-Stack Platform
 
-**Status: LIVE 2026-11-03 — Pages: https://bbc-academy.pages.dev/ · API: https://bbc-academy-fullstack.onrender.com · Database: Supabase project `bbc-academy` (migrations 001–004 applied, SEED_DEMO=false).**
+**Status: LIVE 2026-11-03 — Pages: https://bbc-academy.pages.dev/ · API: https://bbc-academy-fullstack.onrender.com · Database: Supabase project `bbc-academy` (migrations 001–004 applied; **005_fixes.sql pending**, see
+`docs/DEPLOY.md` §1, SEED_DEMO=false).**
 
 A complete learning platform for an English academy: public site, CEFR
 levels, a scored placement test, enrolment, lessons, assignments + grading,
@@ -68,8 +69,9 @@ python3 -m http.server 8000   # config.js default "" → yellow DEMO MODE banner
 
 ## Demo accounts (demo only — never real credentials)
 
-Seeded automatically by the backend when `SEED_DEMO=true` (default locally,
-must be `false` in production). Password for all three: `Demo1234!`
+Seeded automatically by the backend only when `SEED_DEMO=true`, or when
+`SEED_DEMO` is unset and `NODE_ENV` is not `production` (so a local run gets
+them, a production run does not). Password for all three: `Demo1234!`
 
 | Role | Email |
 |---|---|
@@ -88,6 +90,8 @@ that device only and nothing is saved on a server.
 | JWT auth, bcrypt passwords, roles, rate limiting, CORS allow-list | Real |
 | Courses, levels, lessons, enrolments, placement results, assignments, submissions, grades, attendance, announcements | Real (API + DB schema) |
 | Placement test (20 questions, server-scored, CEFR bands) | Real scoring; questions are generic grammar/vocabulary, not an official exam |
+| Dashboards (student / teacher / admin) | Real in connected mode: role-guarded, real API data. Student: courses, level, attendance, homework + submission form, self-enrol from the course page, password change. Teacher: classes, grading, attendance, announcements, and creating lessons + assignments. Admin: bookings → create student account + enrol, user roles + password resets, course→teacher assignment, enrolments. Every role can change its own password |
+| Booking → account journey | Real: anonymous booking request (with email) → admin confirms → admin creates the student account and enrols them → student logs in |
 | Live classes | Link field only (`live_class_url`) — teacher pastes a Zoom/Meet link; no video platform built in |
 | Payments | **PLACEHOLDER ONLY** — records an intent/status, no provider, no keys, no money moves |
 | Email sending | **Placeholder** — no provider wired; announcements are in-platform |
