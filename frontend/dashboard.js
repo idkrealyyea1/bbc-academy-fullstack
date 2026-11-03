@@ -319,6 +319,8 @@
   }
 
   async function renderAdmin(me) {
+    var levels = [];
+    try { levels = (await api.req('/api/levels')).levels || []; } catch (e) { levels = []; }
     var data = await Promise.all([
       api.req('/api/admin/users'), api.req('/api/courses?all=1'), api.req('/api/admin/booking-requests'), api.req('/api/enrolments')
     ]);
@@ -331,12 +333,23 @@
       + overview('Students', 'الطلاب', students.length, '', '')
       + overview('Courses', 'الدورات', courses.length, '', '')
       + overview('Pending bookings', 'حجوزات معلّقة', pending.length, '', ''))
+      + view('students', 'Students', 'الطلاب', '<div class="card"><h3>' + h(t('Enrol a student', 'تسجيل طالب في دورة')) + '</h3>'
+      + '<form id="adminEnrolForm"><div class="field"><label>' + h(t('Student', 'الطالب')) + ' <select name="student_id">' + students.map(function (u) { return '<option value="' + h(u.id) + '">' + h(u.full_name) + ' (' + h(u.email) + ')</option>'; }).join('') + '</select></label></div>'
+      + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('Choose a course', 'اختر دورة')) + '</option>' + courseOpts + '</select></label></div>'
+      + '<button class="btn small" type="submit">' + h(t('Enrol', 'سجّل')) + '</button></form></div>'
+      + '<div class="card">'
+      + table([t('Name', 'الاسم'), t('Email', 'البريد'), t('Username', 'اسم المستخدم'), t('Courses', 'الدورات'), ''], students.map(function (u) {
+        var myCourses = enr.filter(function (e) { return e.student_id === u.id; }).map(function (e) { var c = cmap[e.course_id]; return c ? (lang === 'ar' ? c.title_ar || c.title_en : c.title_en) : e.course_id; }).join(' · ');
+        return '<tr><td>' + h(u.full_name) + '</td><td>' + h(u.email) + '</td><td>' + h(u.username || '') + '</td><td>' + h(myCourses || '') + '</td>'
+          + '<td><button class="btn small outline" data-delete-user="' + h(u.id) + '">' + h(t('Delete', 'حذف')) + '</button></td></tr>';
+      }), t('No students yet.', 'لا يوجد طلاب بعد.')) + '</div>')
       + view('bookings', 'Booking requests', 'طلبات الحجز', '<div class="card">'
       + table([t('Name', 'الاسم'), t('Contact', 'التواصل'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], bookings.map(function (b) {
         var actions = b.status === 'pending'
           ? '<button class="btn small" data-confirm="' + h(b.id) + '">' + h(t('Confirm', 'تأكيد')) + '</button> <button class="btn small outline" data-reject="' + h(b.id) + '">' + h(t('Reject', 'رفض')) + '</button>'
           : '';
-        actions += ' <button class="btn small outline" data-create="' + h(b.id) + '">' + h(t('Create account', 'إنشاء حساب')) + '</button>';
+        if (b.status !== 'rejected') actions += ' <button class="btn small outline" data-create="' + h(b.id) + '">' + h(t('Create account', 'إنشاء حساب')) + '</button>';
+        actions += ' <button class="btn small outline" data-delete-booking="' + h(b.id) + '">' + h(t('Delete', 'حذف')) + '</button>';
         var contact = [b.email, b.phone].filter(Boolean).join(' · ');
         return '<tr><td>' + h(b.full_name) + '</td><td>' + h(contact) + '</td><td>' + h(b.course || '') + '</td><td>' + h(b.status) + '</td><td>' + actions + '</td></tr>';
       }), t('No booking requests yet.', 'لا توجد طلبات حجز بعد.')) + '</div>')
@@ -348,26 +361,43 @@
       + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('No enrolment', 'بدون تسجيل')) + '</option>' + courseOpts + '</select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create student account', 'إنشاء حساب الطالب')) + '</button></form>'
       + '<div id="adminCreateAccountOk" class="success" hidden style="margin-top:1rem"></div></div>')
-      + view('people', 'People', 'الأشخاص', '<div class="card">'
+      + view('people', 'People', 'الأشخاص', '<div class="card"><h3>' + h(t('Create a teacher', 'إنشاء حساب معلم')) + '</h3>'
+      + '<form id="adminCreateTeacherForm"><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required></label></div>'
+      + '<div class="field"><label>' + h(t('Username (optional)', 'اسم المستخدم (اختياري)')) + ' <input name="username"></label></div>'
+      + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" required></label></div>'
+      + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
+      + '<button class="btn small" type="submit">' + h(t('Create teacher', 'إنشاء معلم')) + '</button></form>'
+      + '<div id="adminCreateTeacherOk" class="success" hidden style="margin-top:1rem"></div></div>'
+      + '<div class="card">'
       + table([t('Name', 'الاسم'), t('Email', 'البريد'), t('Role', 'الدور'), t('New password', 'كلمة مرور جديدة'), ''], users.map(function (u) {
         return '<tr><td>' + h(u.full_name) + '</td><td>' + h(u.email) + '</td>'
           + '<td><select data-role-for="' + h(u.id) + '">' + ['student', 'teacher', 'admin'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + h(r) + '</option>'; }).join('') + '</select></td>'
           + '<td><input type="password" data-pw-for="' + h(u.id) + '" placeholder="' + h(t('8+ characters', '8 أحرف فأكثر')) + '" style="width:150px"></td>'
-          + '<td><button class="btn small" data-save-user="' + h(u.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
+          + '<td><button class="btn small" data-save-user="' + h(u.id) + '">' + h(t('Save', 'حفظ')) + '</button>' + (u.id === me.id ? '' : ' <button class="btn small outline" data-delete-user="' + h(u.id) + '">' + h(t('Delete', 'حذف')) + '</button>') + '</td></tr>';
       }), t('No users yet.', 'لا يوجد مستخدمون بعد.')) + '</div>')
-      + view('courses', 'Courses and teachers', 'الدورات والمعلمون', '<div class="card">'
+      + view('courses', 'Courses and teachers', 'الدورات والمعلمون', '<div class="card"><h3>' + h(t('Create a course', 'إنشاء دورة')) + '</h3>'
+      + '<form id="adminCreateCourseForm"><div class="field"><label>' + h(t('Title (English)', 'العنوان بالإنجليزية')) + ' <input name="title_en" id="adminCourseTitleEn" required></label></div>'
+      + '<div class="field"><label>' + h(t('Title (Arabic, optional)', 'العنوان بالعربية (اختياري)')) + ' <input name="title_ar"></label></div>'
+      + '<div class="field"><label>' + h(t('Slug (lowercase, hyphens only)', 'المعرّف (أحرف صغيرة وشرطات فقط)')) + ' <input name="slug" id="adminCourseSlug" required></label></div>'
+      + '<div class="field"><label>' + h(t('Level', 'المستوى')) + ' <select name="level_id"><option value="">' + h(t('No level', 'بدون مستوى')) + '</option>' + levels.map(function (l) { return '<option value="' + h(l.id) + '">' + h(l.code) + ' — ' + h(lang === 'ar' ? l.name_ar || l.name_en : l.name_en) + '</option>'; }).join('') + '</select></label></div>'
+      + '<div class="field"><label>' + h(t('Weeks (optional)', 'عدد الأسابيع (اختياري)')) + ' <input name="duration_weeks" type="number" min="1"></label></div>'
+      + '<div class="field"><label>' + h(t('Teacher', 'المعلم')) + ' <select name="teacher_id"><option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) { return '<option value="' + h(u.id) + '">' + h(u.full_name) + '</option>'; }).join('') + '</select></label></div>'
+      + '<div class="field"><label><input name="is_published" type="checkbox" checked> ' + h(t('Published (visible to everyone)', 'منشورة (ظاهرة للجميع)')) + '</label></div>'
+      + '<button class="btn small" type="submit">' + h(t('Create course', 'إنشاء دورة')) + '</button></form>'
+      + '<div id="adminCreateCourseOk" class="success" hidden style="margin-top:1rem"></div></div>'
+      + '<div class="card">'
       + table([t('Course', 'الدورة'), t('Teacher', 'المعلم'), ''], courses.map(function (c) {
         var opts = '<option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) {
           return '<option value="' + h(u.id) + '"' + (c.teacher_id === u.id ? ' selected' : '') + '>' + h(u.full_name) + '</option>';
         }).join('');
         return '<tr><td>' + h(c.title_en) + '</td><td><select data-teacher-for="' + h(c.id) + '">' + opts + '</select></td>'
-          + '<td><button class="btn small" data-save-course="' + h(c.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
+          + '<td><button class="btn small" data-save-course="' + h(c.id) + '">' + h(t('Save', 'حفظ')) + '</button> <button class="btn small outline" data-delete-course="' + h(c.id) + '">' + h(t('Delete', 'حذف')) + '</button></td></tr>';
       }), t('No courses yet.', 'لا توجد دورات بعد.')) + '</div>')
       + view('enrolments', 'Recent enrolments', 'أحدث التسجيلات', '<div class="card">'
       + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], enr.slice(0, 20).map(function (e) {
         var c = cmap[e.course_id];
         var approve = e.status === 'pending' ? '<button class="btn small" data-approve="' + h(e.id) + '">' + h(t('Approve', 'موافقة')) + '</button>' : '';
-        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td><td>' + approve + '</td></tr>';
+        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td><td>' + approve + ' <button class="btn small outline" data-remove-enrolment="' + h(e.id) + '">' + h(t('Remove', 'إزالة')) + '</button></td></tr>';
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>');
 
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
@@ -426,6 +456,79 @@
         catch (err) { alert(err.message); }
       });
     });
+    content.querySelectorAll('[data-delete-booking]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!window.confirm(t('Delete this booking request? This cannot be undone.', 'حذف طلب الحجز هذا؟ لا يمكن التراجع عن هذا.'))) return;
+        try { await api.req('/api/admin/booking-requests/' + b.dataset.deleteBooking, { method: 'DELETE' }); location.reload(); }
+        catch (err) { alert(err.message); }
+      });
+    });
+    content.querySelectorAll('[data-delete-course]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!window.confirm(t('Delete this course? Enrolments for it stay as they are.', 'حذف هذه الدورة؟ التسجيلات فيها تبقى كما هي.'))) return;
+        try { await api.req('/api/courses/' + b.dataset.deleteCourse, { method: 'DELETE' }); location.reload(); }
+        catch (err) { alert(err.message); }
+      });
+    });
+    content.querySelectorAll('[data-delete-user]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!window.confirm(t('Delete this user? Their enrolments are removed too.', 'حذف هذا المستخدم؟ تسجيلاته تُحذف أيضًا.'))) return;
+        try { await api.req('/api/admin/users/' + b.dataset.deleteUser, { method: 'DELETE' }); location.reload(); }
+        catch (err) { alert(err.message); }
+      });
+    });
+    content.querySelectorAll('[data-remove-enrolment]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!window.confirm(t('Remove this enrolment?', 'إزالة هذا التسجيل؟'))) return;
+        try { await api.req('/api/enrolments/' + b.dataset.removeEnrolment, { method: 'DELETE' }); location.reload(); }
+        catch (err) { alert(err.message); }
+      });
+    });
+    var enrolForm = document.getElementById('adminEnrolForm');
+    if (enrolForm) enrolForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      try {
+        await api.req('/api/admin/enrolments', { method: 'POST', body: { student_id: enrolForm.elements.student_id.value, course_id: enrolForm.elements.course_id.value, status: 'active' } });
+        location.reload();
+      } catch (err) { alert(err.message); }
+    });
+    var teacherForm = document.getElementById('adminCreateTeacherForm');
+    if (teacherForm) teacherForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      try {
+        var tu = await api.req('/api/admin/users', { method: 'POST', body: {
+          full_name: teacherForm.elements.full_name.value.trim(), username: teacherForm.elements.username.value.trim() || null,
+          email: teacherForm.elements.email.value.trim(), password: teacherForm.elements.password.value, role: 'teacher' } });
+        var tok = document.getElementById('adminCreateTeacherOk');
+        if (tok) { tok.hidden = false; tok.textContent = (lang === 'ar' ? 'تم إنشاء حساب المعلم ' : 'Teacher account created for ') + tu.user.email + ' ✔'; }
+        teacherForm.reset();
+      } catch (err) { alert((lang === 'ar' ? 'فشل إنشاء المعلم: ' : 'Teacher creation failed: ') + err.message); }
+    });
+    var courseForm = document.getElementById('adminCreateCourseForm');
+    if (courseForm) {
+      var titleInput = document.getElementById('adminCourseTitleEn');
+      var slugInput = document.getElementById('adminCourseSlug');
+      if (titleInput && slugInput) {
+        titleInput.addEventListener('input', function () {
+          if (slugInput.dataset.edited) return;
+          slugInput.value = titleInput.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        });
+        slugInput.addEventListener('input', function () { slugInput.dataset.edited = '1'; });
+      }
+      courseForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        try {
+          var cc = await api.req('/api/courses', { method: 'POST', body: {
+            title_en: courseForm.elements.title_en.value.trim(), title_ar: courseForm.elements.title_ar.value.trim() || null,
+            slug: courseForm.elements.slug.value.trim(), level_id: courseForm.elements.level_id.value || null,
+            duration_weeks: courseForm.elements.duration_weeks.value ? Number(courseForm.elements.duration_weeks.value) : null,
+            teacher_id: courseForm.elements.teacher_id.value || null, is_published: courseForm.elements.is_published.checked } });
+          var cok = document.getElementById('adminCreateCourseOk');
+          if (cok) { cok.hidden = false; cok.textContent = (lang === 'ar' ? 'تم إنشاء الدورة ' : 'Course created: ') + cc.course.title_en + ' ✔'; }
+          courseForm.reset();
+        } catch (err) { alert((lang === 'ar' ? 'فشل إنشاء الدورة: ' : 'Course creation failed: ') + err.message); }
+      });
+    }
     if (form) form.addEventListener('submit', async function (e) {
       e.preventDefault();
       try {

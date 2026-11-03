@@ -254,6 +254,7 @@ app.put('/api/admin/booking-requests/:id', auth, roles('admin'), wrap(async (req
   const r = await store.updateBookingRequest(req.params.id, req.body.status);
   return r ? ok(res, { booking_request: r }) : bad(res, 404, 'Booking request not found');
 }));
+app.delete('/api/admin/booking-requests/:id', auth, roles('admin'), wrap(async (req, res) => (await store.deleteBookingRequest(req.params.id) ? ok(res, { deleted: true }) : bad(res, 404, 'Booking request not found'))));
 
 // --- Enrolments ---
 app.post('/api/enrolments', auth, roles('student', 'admin'), wrap(async (req, res) => {
@@ -414,6 +415,10 @@ app.put('/api/admin/users/:id', auth, roles('admin'), wrap(async (req, res) => {
   }
   if (!Object.keys(patch).length) return bad(res, 400, 'Nothing to update');
   return ok(res, { user: publicUser(await store.updateUser(u.id, patch)) });
+}));
+app.delete('/api/admin/users/:id', auth, roles('admin'), wrap(async (req, res) => {
+  if (req.params.id === req.user.id) return bad(res, 400, 'You cannot delete your own account');
+  return (await store.deleteUser(req.params.id) ? ok(res, { deleted: true }) : bad(res, 404, 'User not found'));
 }));
 app.post('/api/admin/enrolments', auth, roles('admin'), wrap(async (req, res) => {
   if (!reqStr(req.body, 'student_id') || !reqStr(req.body, 'course_id')) return bad(res, 400, 'student_id and course_id required');

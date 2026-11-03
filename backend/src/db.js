@@ -144,6 +144,10 @@ class MemoryStore {
   async createBookingRequest(b) { const r = { id: uid(), status: 'pending', created_at: now(), ...b }; this.bookingRequests.push(r); return r; }
   async listBookingRequests() { return [...this.bookingRequests].reverse(); }
   async updateBookingRequest(id, status) { const r = this.bookingRequests.find(x => x.id === id); if (!r) return null; r.status = status; return r; }
+  async deleteBookingRequest(id) { const r = await this.pool.query('DELETE FROM booking_requests WHERE id=$1', [id]); return r.rowCount > 0; }
+  async deleteUser(id) { await this.pool.query('DELETE FROM enrolments WHERE student_id=$1', [id]); await this.pool.query('UPDATE courses SET teacher_id=NULL WHERE teacher_id=$1', [id]); const r = await this.pool.query('DELETE FROM profiles WHERE id=$1', [id]); return r.rowCount > 0; }
+  async deleteBookingRequest(id) { const i = this.bookingRequests.findIndex(x => x.id === id); if (i < 0) return false; this.bookingRequests.splice(i, 1); return true; }
+  async deleteUser(id) { const i = this.users.findIndex(x => x.id === id); if (i < 0) return false; this.enrolments = this.enrolments.filter(e => e.student_id !== id); this.courses.forEach(c => { if (c.teacher_id === id) c.teacher_id = null; }); this.users.splice(i, 1); return true; }
 }
 
 class PgStore {
