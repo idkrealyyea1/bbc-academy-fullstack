@@ -48,15 +48,24 @@ app.post('/api/auth/register', async (req, res) => {
         if (!key || req.headers['x-admin-setup-key'] !== key) return bad(res, 403, 'Admin registration requires ADMIN_SETUP_KEY');
       } else return bad(res, 400, 'role must be student, teacher, or admin (with key)');
     }
+    const username = req.body.username !== undefined && req.body.username !== null && String(req.body.username).trim() !== ''
+      ? String(req.body.username).trim().toLowerCase() : null;
+    if (username && !/^[a-z0-9_.]{3,30}$/.test(username)) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
     if (await store.findUserByEmail(email)) return bad(res, 409, 'Email already registered');
-    const user = await store.createUser({ email, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
+    if (username && await store.findUserByUsername(username)) return bad(res, 409, 'Username already taken');
+    const user = await store.createUser({ email, username, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
     return ok(res, { user: publicUser(user), token: sign(user) }, 201);
   } catch (e) { console.error(e); return bad(res, 500, 'Registration failed'); }
 });
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!isEmail(email) || typeof password !== 'string') return bad(res, 400, 'Email and password required');
-  const user = await store.findUserByEmail(email);
+  const { email, username, password } = req.body || {};
+  if (typeof password !== 'string') return bad(res, 400, 'Email and password required');
+  // Identifier: an explicit username, or an email value without '@' is a username.
+  let user = null;
+  if (username) user = await store.findUserByUsername(String(username));
+  else if (typeof email === 'string' && email.includes('@')) { if (!isEmail(email)) return bad(res, 400, 'Email and password required'); user = await store.findUserByEmail(email); }
+  else if (typeof email === 'string' && email.trim()) user = await store.findUserByUsername(email.trim());
+  else return bad(res, 400, 'Email and password required');
   if (!user || !(await bcrypt.compare(password, user.password_hash || ''))) return bad(res, 401, 'Invalid email or password');
   return ok(res, { user: publicUser(user), token: sign(user) });
 });
@@ -85,7 +94,13 @@ app.post('/api/courses', auth, roles('admin', 'teacher'), async (req, res) => {
   return ok(res, { course: c }, 201);
 });
 app.put('/api/courses/:id', auth, roles('admin', 'teacher'), async (req, res) => {
-  const c = await store.updateCourse(req.params.id, { ...req.body, price_amount: undefined });
+  const existing = await store.getCourse(req.params.id);
+  if (!existing) return bad(res, 404, 'Course not found');
+  if (req.user.role === 'teacher' && existing.teacher_id && existing.teacher_id !== req.user.id) return bad(res, 403, 'Teachers may only edit their own courses');
+  // A teacher may claim an unassigned course by editing it; they may not reassign it to someone else.
+  const body = { ...req.body, price_amount: undefined };
+  if (req.user.role === 'teacher' && body.teacher_id !== undefined && body.teacher_id !== null && body.teacher_id !== req.user.id) return bad(res, 403, 'Teachers may only edit their own courses');
+  const c = await store.updateCourse(req.params.id, body);
   return c ? ok(res, { course: c }) : bad(res, 404, 'Course not found');
 });
 app.delete('/api/courses/:id', auth, roles('admin'), async (req, res) => {
@@ -124,10 +139,31 @@ app.post('/api/enrolments', auth, roles('student', 'admin'), async (req, res) =>
   if (!reqStr(req.body, 'course_id')) return bad(res, 400, 'course_id required');
   const course = await store.getCourse(req.body.course_id);
   if (!course) return bad(res, 404, 'Course not found');
-  return ok(res, { enrolment: await store.createEnrolment({ student_id: req.user.id, course_id: course.id, status: 'pending' }) }, 201);
+  let studentId = req.user.id; let status = 'pending';
+  if (req.user.role === 'admin') {
+    studentId = req.body.student_id || req.user.id;
+    const student = await store.getUser(studentId);
+    if (!student) return bad(res, 404, 'Student not found');
+    status = 'active';
+  } else if (req.body.student_id && req.body.student_id !== req.user.id) {
+    return bad(res, 403, 'Students may only enrol themselves');
+  }
+  const existing = (await store.listEnrolmentsAll()).find(e => e.student_id === studentId && e.course_id === course.id);
+  if (existing) return bad(res, 409, 'Student is already enrolled in this course');
+  try {
+    return ok(res, { enrolment: await store.createEnrolment({ student_id: studentId, course_id: course.id, status }) }, 201);
+  } catch (e) { return bad(res, 409, 'Student is already enrolled in this course'); }
 });
 app.get('/api/enrolments/me', auth, async (req, res) => ok(res, { enrolments: await store.listEnrolmentsForUser(req.user.id) }));
-app.get('/api/enrolments', auth, roles('admin', 'teacher'), async (req, res) => ok(res, { enrolments: await store.listEnrolmentsAll() }));
+app.get('/api/enrolments', auth, roles('admin', 'teacher'), async (req, res) => {
+  const all = await store.listEnrolmentsAll();
+  if (req.user.role === 'admin') return ok(res, { enrolments: all });
+  const mine = new Set((await store.listCourses()).filter(c => c.teacher_id === req.user.id).map(c => c.id));
+  return ok(res, { enrolments: all.filter(e => mine.has(e.course_id)) });
+});
+app.delete('/api/enrolments/:id', auth, roles('admin'), async (req, res) => {
+  return (await store.deleteEnrolment(req.params.id) ? ok(res, { deleted: true }) : bad(res, 404, 'Enrolment not found'));
+});
 
 // --- Placement test: 20 questions, scored server-side ---
 // Must match the 20 questions in frontend/app.js (QUIZ_ANSWERS), in order.
@@ -189,7 +225,7 @@ app.get('/api/payments', auth, roles('admin'), async (req, res) => ok(res, { pay
 app.get('/api/admin/users', auth, roles('admin'), async (req, res) => ok(res, { users: (await store.listUsers()).map(publicUser) }));
 
 app.use((req, res) => bad(res, 404, 'Not found'));
-app.use((err, req, res, next) => { console.error(err); return bad(res, err.message === 'CORS origin not allowed' ? 403 : 500, err.message === 'CORS origin not allowed' ? 'Origin not allowed' : 'Server error'); });
+app.use((err, req, res, next) => { console.error(err); if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) return bad(res, 400, 'Invalid JSON body'); return bad(res, err.message === 'CORS origin not allowed' ? 403 : 500, err.message === 'CORS origin not allowed' ? 'Origin not allowed' : 'Server error'); });
 
 async function main() {
   await seedDemo(store, bcrypt);

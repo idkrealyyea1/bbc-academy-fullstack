@@ -14,8 +14,8 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | Public | `{ email, password (≥8), full_name, role?: "student" \| "teacher" }` — `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY` | 201 `{ user, token }` |
-| POST | `/api/auth/login` | Public | `{ email, password }` | `{ user, token }` |
+| POST | `/api/auth/register` | Public | `{ email, password (≥8), full_name, username?: 3-30 chars (letters, digits, `_` or `.`), role?: "student" \| "teacher" }` — `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY`; duplicate username → 409 | 201 `{ user, token }` |
+| POST | `/api/auth/login` | Public | `{ email, password }` **or** `{ username, password }` (an email value without `@` is also treated as a username) — wrong identifier/password → generic 401 | `{ user, token }` |
 | GET | `/api/auth/me` | Any role | — | `{ user }` |
 
 `user` never includes `password_hash`.
@@ -35,7 +35,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | GET | `/api/courses` | Public | — | `{ courses: [...] }` |
 | GET | `/api/courses/:id` | Public | id = uuid or slug | `{ course }` |
 | POST | `/api/courses` | teacher, admin | `{ slug, title_en, title_ar?, description_en?, description_ar?, duration_weeks?, level_id?, teacher_id? }` — `price_amount` is always stored NULL (TODO for owner) | 201 `{ course }` |
-| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored) | `{ course }` |
+| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored) — a teacher may only edit a course with no teacher or their own `teacher_id` (403 otherwise); admin unrestricted | `{ course }` |
 | DELETE | `/api/courses/:id` | admin | — | `{ deleted: true }` |
 
 ## Lessons
@@ -49,9 +49,10 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/enrolments` | student, admin | `{ course_id }` | 201 `{ enrolment }` (status `pending`) |
+| POST | `/api/enrolments` | student, admin | `{ course_id }` for a student (status `pending`, self only — 403 if `student_id` differs); admin may pass `student_id` (must exist, 404 otherwise) and the enrolment is created `active` | 201 `{ enrolment }` |
 | GET | `/api/enrolments/me` | Any role | — | `{ enrolments: [...] }` |
-| GET | `/api/enrolments` | teacher, admin | — | `{ enrolments: [...] }` |
+| GET | `/api/enrolments` | teacher, admin | — | admin: all; teacher: only enrolments for courses they teach (`courses.teacher_id = teacher id`), filtered server-side; enrolments include `student_name` | `{ enrolments: [...] }` |
+| DELETE | `/api/enrolments/:id` | admin | — | `{ deleted: true }` |
 
 ## Placement tests
 
@@ -101,7 +102,20 @@ The admin confirms a request, then creates the student account — students neve
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes) |
+| GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes; includes `username`) |
+
+## Migrations
+
+`db/migrations/005_usernames.sql` adds `profiles.username` (nullable) plus a
+unique index on it (many NULLs allowed, so existing users are unaffected).
+
+**Deployment order — migration 005 FIRST, code second:** run
+`005_usernames.sql` in the Supabase SQL Editor and confirm it succeeds
+*before* deploying this slice. Otherwise teacher/student creation that writes
+`username` will fail on Postgres (the column does not exist yet) and the API
+will return 500. The admin dashboard also depends on the new endpoints
+(`POST /api/enrolments` with `student_id`, `DELETE /api/enrolments/:id`,
+teacher-filtered `GET /api/enrolments`, username login) in this slice.
 
 ## Demo accounts (local backend only, `SEED_DEMO=true`)
 
