@@ -10,7 +10,9 @@ production project until the owner has confirmed the demo content is wanted.
 5. `migrations/005_fixes.sql` — `booking_requests.email`, one grade row per
    submission. **Required** by the current API: booking requests send an email
    and grading upserts into `grades`.
-6. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
+6. `migrations/005_usernames.sql` — `profiles.username` + unique index (teacher/student login by username).
+7. `migrations/006_levels.sql` — the six CEFR levels (reference data, NOT demo content). Required: the "add course" form matches a level by `name_en`, so an empty `levels` table files every course under NULL and shows it as Beginner. Idempotent, safe to re-run on production.
+8. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
    prices are NULL on purpose (TODO for the owner); teacher rows are labelled
    DEMO and must be replaced with real staff.
 
