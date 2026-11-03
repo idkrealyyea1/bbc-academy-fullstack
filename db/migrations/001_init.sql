@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS submissions (
 
 CREATE TABLE IF NOT EXISTS grades (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  submission_id UUID NOT NULL UNIQUE REFERENCES submissions(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   score NUMERIC(5, 2) NOT NULL CHECK (score >= 0 AND score <= 100),
   feedback TEXT,

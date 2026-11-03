@@ -12,6 +12,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE TABLE IF NOT EXISTS booking_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name TEXT NOT NULL,
+  email TEXT,
   phone TEXT,
   course TEXT,
   source TEXT,

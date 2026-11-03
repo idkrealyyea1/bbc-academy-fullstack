@@ -29,8 +29,8 @@ class MemoryStore {
   constructor() {
     this.users = []; this.courses = []; this.levels = [...DEMO_LEVELS.map((l, i) => ({ id: `level-${l.code}`, ...l }))];
     this.lessons = []; this.enrolments = []; this.placements = []; this.assignments = [];
-    this.submissions = []; this.attendance = []; this.announcements = []; this.payments = []; this.bookingRequests = [];
-    this.courses = DEMO_COURSES.map((c, i) => ({ id: `course-${c.slug}`, teacher_id: null, ...c, created_at: now() }));
+    this.submissions = []; this.grades = []; this.attendance = []; this.announcements = []; this.payments = []; this.bookingRequests = [];
+    this.courses = DEMO_COURSES.map((c) => ({ id: `course-${c.slug}`, teacher_id: null, ...c, created_at: now() }));
   }
   async findUserByEmail(e) { return this.users.find(u => u.email === e.toLowerCase()) || null; }
   async getUser(id) { return this.users.find(u => u.id === id) || null; }
@@ -44,19 +44,76 @@ class MemoryStore {
   async updateCourse(id, p) { const c = await this.getCourse(id); if (!c) return null; Object.assign(c, p); return c; }
   async deleteCourse(id) { const i = this.courses.findIndex(c => c.id === id); if (i < 0) return false; this.courses.splice(i, 1); return true; }
   async listLessons(courseId) { return this.lessons.filter(l => !courseId || l.course_id === courseId).sort((a, b) => a.order_no - b.order_no); }
+  async listLessonsForStudent(studentId) {
+    const ids = new Set(this.enrolments.filter(e => e.student_id === studentId).map(e => e.course_id));
+    return this.lessons.filter(l => ids.has(l.course_id)).sort((a, b) => a.order_no - b.order_no);
+  }
+  async listLessonsForTeacher(teacherId) {
+    const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
+    return this.lessons.filter(l => ids.has(l.course_id)).sort((a, b) => a.order_no - b.order_no);
+  }
   async createLesson(l) { const r = { id: uid(), created_at: now(), ...l }; this.lessons.push(r); return r; }
-  async createEnrolment(e) { const r = { id: uid(), status: 'pending', created_at: now(), ...e }; this.enrolments.push(r); return r; }
-  async listEnrolmentsForUser(uid_) { return this.enrolments.filter(e => e.student_id === uid_); }
-  async listEnrolmentsAll() { return this.enrolments; }
+  async isEnrolled(studentId, courseId) { return this.enrolments.some(e => e.student_id === studentId && e.course_id === courseId); }
+  async createEnrolment(e) {
+    if (this.enrolments.some(x => x.student_id === e.student_id && x.course_id === e.course_id)) {
+      const err = new Error('Already enrolled'); err.code = '23505'; throw err;
+    }
+    const r = { id: uid(), created_at: now(), ...e, status: e.status || 'pending' };
+    this.enrolments.push(r); return r;
+  }
+  async listEnrolmentsForUser(u) { return this.enrolments.filter(e => e.student_id === u); }
+  async listEnrolmentsAll(teacherId) {
+    let rows = this.enrolments;
+    if (teacherId) {
+      const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
+      rows = rows.filter(e => ids.has(e.course_id));
+    }
+    return rows.map(e => ({ ...e, student_name: (this.users.find(u => u.id === e.student_id) || {}).full_name || null }));
+  }
   async createPlacement(p) { const r = { id: uid(), created_at: now(), ...p }; this.placements.push(r); return r; }
-  async listPlacementsForUser(uid_) { return this.placements.filter(p => p.student_id === uid_); }
+  async listPlacementsForUser(u) { return this.placements.filter(p => p.student_id === u); }
   async createAssignment(a) { const r = { id: uid(), created_at: now(), ...a }; this.assignments.push(r); return r; }
+  async getAssignment(id) { return this.assignments.find(a => a.id === id) || null; }
   async listAssignments(courseId) { return this.assignments.filter(a => !courseId || a.course_id === courseId); }
+  async listAssignmentsForStudent(studentId) {
+    const ids = new Set(this.enrolments.filter(e => e.student_id === studentId).map(e => e.course_id));
+    return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).map(a => {
+      const s = this.submissions.find(x => x.assignment_id === a.id && x.student_id === studentId) || null;
+      return { ...a, submission: s };
+    });
+  }
+  async listAssignmentsForTeacher(teacherId) {
+    const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
+    return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  }
   async createSubmission(s) { const r = { id: uid(), grade: null, feedback: null, created_at: now(), ...s }; this.submissions.push(r); return r; }
-  async listSubmissions(assignmentId) { return this.submissions.filter(s => !assignmentId || s.assignment_id === assignmentId); }
-  async gradeSubmission(id, grade, feedback) { const s = this.submissions.find(x => x.id === id); if (!s) return null; s.grade = grade; s.feedback = feedback; return s; }
-  async createAttendance(a) { const r = { id: uid(), created_at: now(), attended_on: new Date().toISOString().slice(0, 10), ...a, attended_on: a.attended_on || new Date().toISOString().slice(0, 10) }; this.attendance.push(r); return r; }
-  async listAttendance(courseId) { return this.attendance.filter(a => !courseId || a.course_id === courseId); }
+  async getSubmission(id) { return this.submissions.find(s => s.id === id) || null; }
+  async listSubmissions(assignmentId, teacherId) {
+    let rows = this.submissions.filter(s => !assignmentId || s.assignment_id === assignmentId);
+    if (teacherId) {
+      const ids = new Set(this.assignments.filter(a => a.teacher_id === teacherId).map(a => a.id));
+      rows = rows.filter(s => ids.has(s.assignment_id));
+    }
+    return rows.map(s => ({ ...s, student_name: (this.users.find(u => u.id === s.student_id) || {}).full_name || null }));
+  }
+  async gradeSubmission(id, grade, feedback) {
+    const s = this.submissions.find(x => x.id === id); if (!s) return null;
+    s.grade = grade; s.feedback = feedback;
+    const g = this.grades.find(x => x.submission_id === id);
+    if (g) { g.score = grade; g.feedback = feedback; }
+    else this.grades.push({ id: uid(), submission_id: id, student_id: s.student_id, score: grade, feedback, created_at: now() });
+    return s;
+  }
+  async createAttendance(a) { const r = { id: uid(), created_at: now(), ...a, attended_on: a.attended_on || new Date().toISOString().slice(0, 10) }; this.attendance.push(r); return r; }
+  async listAttendance(courseId, teacherId) {
+    let rows = this.attendance.filter(a => !courseId || a.course_id === courseId);
+    if (teacherId) {
+      const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
+      rows = rows.filter(a => ids.has(a.course_id));
+    }
+    return rows;
+  }
+  async listAttendanceForUser(u) { return this.attendance.filter(a => a.student_id === u); }
   async createAnnouncement(a) { const r = { id: uid(), created_at: now(), ...a }; this.announcements.push(r); return r; }
   async listAnnouncements() { return [...this.announcements].reverse(); }
   async createPayment(p) { const r = { id: uid(), status: 'pending', created_at: now(), ...p }; this.payments.push(r); return r; }
@@ -82,25 +139,55 @@ class PgStore {
   async updateCourse(id, p) { const sets = []; const vals = []; let i = 1; for (const [k, v] of Object.entries(p)) { if (['id', 'created_at'].includes(k)) continue; sets.push(`${k}=$${i++}`); vals.push(v); } if (!sets.length) return this.getCourse(id); vals.push(id); return (await this.q(`UPDATE courses SET ${sets.join(',')} WHERE id=$${i} RETURNING *`, vals))[0] || null; }
   async deleteCourse(id) { const r = await this.pool.query('DELETE FROM courses WHERE id=$1', [id]); return r.rowCount > 0; }
   async listLessons(courseId) { return courseId ? this.q('SELECT * FROM lessons WHERE course_id=$1 ORDER BY order_no', [courseId]) : this.q('SELECT * FROM lessons ORDER BY order_no'); }
+  async listLessonsForStudent(studentId) { return this.q('SELECT l.* FROM lessons l JOIN enrolments e ON e.course_id=l.course_id WHERE e.student_id=$1 ORDER BY l.order_no', [studentId]); }
+  async listLessonsForTeacher(teacherId) { return this.q('SELECT l.* FROM lessons l JOIN courses c ON c.id=l.course_id WHERE c.teacher_id=$1 ORDER BY l.order_no', [teacherId]); }
   async createLesson(l) { return (await this.q('INSERT INTO lessons (course_id,title_en,title_ar,content_url,material_url,live_class_url,order_no) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [l.course_id, l.title_en, l.title_ar || null, l.content_url || null, l.material_url || null, l.live_class_url || null, l.order_no || 1]))[0]; }
+  async isEnrolled(studentId, courseId) { return (await this.q('SELECT 1 FROM enrolments WHERE student_id=$1 AND course_id=$2 LIMIT 1', [studentId, courseId])).length > 0; }
   async createEnrolment(e) { return (await this.q('INSERT INTO enrolments (student_id,course_id,status) VALUES ($1,$2,$3) RETURNING *', [e.student_id, e.course_id, e.status || 'pending']))[0]; }
   async listEnrolmentsForUser(u) { return this.q('SELECT * FROM enrolments WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
-  async listEnrolmentsAll() { return this.q('SELECT * FROM enrolments ORDER BY created_at DESC'); }
+  async listEnrolmentsAll(teacherId) {
+    if (teacherId) return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e JOIN courses c ON c.id=e.course_id LEFT JOIN profiles p ON p.id=e.student_id WHERE c.teacher_id=$1 ORDER BY e.created_at DESC', [teacherId]);
+    return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e LEFT JOIN profiles p ON p.id=e.student_id ORDER BY e.created_at DESC');
+  }
   async createPlacement(p) { return (await this.q('INSERT INTO placement_results (student_id,score,total,recommended_level,answers) VALUES ($1,$2,$3,$4,$5) RETURNING *', [p.student_id, p.score, p.total, p.recommended_level, JSON.stringify(p.answers || [])]))[0]; }
   async listPlacementsForUser(u) { return this.q('SELECT * FROM placement_results WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
   async createAssignment(a) { return (await this.q('INSERT INTO assignments (course_id,teacher_id,title,description,due_date) VALUES ($1,$2,$3,$4,$5) RETURNING *', [a.course_id, a.teacher_id, a.title, a.description || null, a.due_date || null]))[0]; }
+  async getAssignment(id) { return (await this.q('SELECT * FROM assignments WHERE id=$1', [id]))[0] || null; }
   async listAssignments(courseId) { return courseId ? this.q('SELECT * FROM assignments WHERE course_id=$1 ORDER BY created_at DESC', [courseId]) : this.q('SELECT * FROM assignments ORDER BY created_at DESC'); }
+  async listAssignmentsForStudent(studentId) {
+    const rows = await this.q('SELECT a.*, s.id AS submission_id, s.grade, s.feedback, s.content_text AS submission_text, s.content_url AS submission_url, s.created_at AS submitted_at FROM assignments a JOIN enrolments e ON e.course_id=a.course_id AND e.student_id=$1 LEFT JOIN submissions s ON s.assignment_id=a.id AND s.student_id=$1 ORDER BY a.created_at DESC', [studentId]);
+    return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, created_at: r.submitted_at } : null }));
+  }
+  async listAssignmentsForTeacher(teacherId) { return this.q('SELECT a.* FROM assignments a JOIN courses c ON c.id=a.course_id WHERE c.teacher_id=$1 ORDER BY a.created_at DESC', [teacherId]); }
   async createSubmission(s) { return (await this.q('INSERT INTO submissions (assignment_id,student_id,content_url,content_text) VALUES ($1,$2,$3,$4) RETURNING *', [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null]))[0]; }
-  async listSubmissions(aid) { return aid ? this.q('SELECT * FROM submissions WHERE assignment_id=$1 ORDER BY created_at DESC', [aid]) : this.q('SELECT * FROM submissions ORDER BY created_at DESC'); }
-  async gradeSubmission(id, grade, feedback) { const s = (await this.q('UPDATE submissions SET grade=$1, feedback=$2 WHERE id=$3 RETURNING *', [grade, feedback || null, id]))[0]; if (!s) return null; await this.q('INSERT INTO grades (submission_id,student_id,score,feedback) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, s.student_id, grade, feedback || null]).catch(() => {}); return s; }
+  async getSubmission(id) { return (await this.q('SELECT * FROM submissions WHERE id=$1', [id]))[0] || null; }
+  async listSubmissions(assignmentId, teacherId) {
+    const where = []; const vals = [];
+    if (assignmentId) { vals.push(assignmentId); where.push(`s.assignment_id=$${vals.length}`); }
+    if (teacherId) { vals.push(teacherId); where.push(`a.teacher_id=$${vals.length}`); }
+    return this.q(`SELECT s.*, p.full_name AS student_name FROM submissions s JOIN assignments a ON a.id=s.assignment_id LEFT JOIN profiles p ON p.id=s.student_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY s.created_at DESC`, vals);
+  }
+  async gradeSubmission(id, grade, feedback) {
+    const s = (await this.q('UPDATE submissions SET grade=$1, feedback=$2 WHERE id=$3 RETURNING *', [grade, feedback || null, id]))[0];
+    if (!s) return null;
+    await this.q('INSERT INTO grades (submission_id,student_id,score,feedback) VALUES ($1,$2,$3,$4) ON CONFLICT (submission_id) DO UPDATE SET score=EXCLUDED.score, feedback=EXCLUDED.feedback', [id, s.student_id, grade, feedback || null]);
+    return s;
+  }
   async createAttendance(a) { return (await this.q('INSERT INTO attendance (course_id,student_id,lesson_id,status,attended_on) VALUES ($1,$2,$3,$4,$5) RETURNING *', [a.course_id, a.student_id, a.lesson_id || null, a.status || 'present', a.attended_on || new Date().toISOString().slice(0, 10)]))[0]; }
-  async listAttendance(courseId) { return courseId ? this.q('SELECT * FROM attendance WHERE course_id=$1 ORDER BY attended_on DESC', [courseId]) : this.q('SELECT * FROM attendance ORDER BY attended_on DESC'); }
+  async listAttendance(courseId, teacherId) {
+    const where = []; const vals = [];
+    if (courseId) { vals.push(courseId); where.push(`a.course_id=$${vals.length}`); }
+    if (teacherId) { vals.push(teacherId); where.push(`c.teacher_id=$${vals.length}`); }
+    const join = teacherId ? ' JOIN courses c ON c.id=a.course_id' : '';
+    return this.q(`SELECT a.* FROM attendance a${join}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY a.attended_on DESC`, vals);
+  }
+  async listAttendanceForUser(u) { return this.q('SELECT * FROM attendance WHERE student_id=$1 ORDER BY attended_on DESC', [u]); }
   async createAnnouncement(a) { return (await this.q('INSERT INTO announcements (author_id,title,body,audience) VALUES ($1,$2,$3,$4) RETURNING *', [a.author_id, a.title, a.body, a.audience || 'all']))[0]; }
   async listAnnouncements() { return this.q('SELECT * FROM announcements ORDER BY created_at DESC'); }
-  async createPayment(p) { return (await this.q('INSERT INTO payments (student_id,course_id,amount,currency,status,provider,provider_ref) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [p.student_id, p.course_id || null, p.amount || null, p.currency || 'ILS', p.status || 'pending', 'placeholder', p.provider_ref || null]))[0]; }
+  async createPayment(p) { return (await this.q('INSERT INTO payments (student_id,course_id,amount,currency,status,provider,provider_ref) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [p.student_id, p.course_id || null, p.amount ?? null, p.currency || 'ILS', p.status || 'pending', 'placeholder', p.provider_ref || null]))[0]; }
   async listPaymentsForUser(u) { return this.q('SELECT * FROM payments WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
   async listPaymentsAll() { return this.q('SELECT * FROM payments ORDER BY created_at DESC'); }
-  async createBookingRequest(b) { return (await this.q('INSERT INTO booking_requests (full_name,phone,course,source,message) VALUES ($1,$2,$3,$4,$5) RETURNING *', [b.full_name, b.phone || null, b.course || null, b.source || null, b.message || null]))[0]; }
+  async createBookingRequest(b) { return (await this.q('INSERT INTO booking_requests (full_name,email,phone,course,source,message) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [b.full_name, b.email || null, b.phone || null, b.course || null, b.source || null, b.message || null]))[0]; }
   async listBookingRequests() { return this.q('SELECT * FROM booking_requests ORDER BY created_at DESC'); }
   async updateBookingRequest(id, status) { return (await this.q('UPDATE booking_requests SET status=$2 WHERE id=$1 RETURNING *', [id, status]))[0] || null; }
 }
@@ -114,7 +201,10 @@ function createStore() {
   const s = new MemoryStore(); s.kind = 'memory'; return s;
 }
 async function seedDemo(store, bcrypt) {
-  if (process.env.SEED_DEMO === 'false') return;
+  // Safe by default: demo accounts are created only when explicitly asked, or
+  // when running locally with no SEED_DEMO setting. Production defaults off.
+  const enabled = process.env.SEED_DEMO === 'true' || (process.env.SEED_DEMO === undefined && process.env.NODE_ENV !== 'production');
+  if (!enabled) return;
   if (store.kind === 'postgres') {
     try {
       const existing = await store.listLevels();
@@ -134,4 +224,6 @@ async function seedDemo(store, bcrypt) {
     }
   }
 }
-module.exports = { createStore, seedDemo, DEMO_LEVELS, DEMO_COURSES };
+// The store classes are exported so tests can exercise the Postgres path
+// against a throwaway schema without starting the HTTP server.
+module.exports = { createStore, seedDemo, DEMO_LEVELS, DEMO_COURSES, MemoryStore, PgStore };
