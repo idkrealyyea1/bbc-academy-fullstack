@@ -69,6 +69,32 @@ test('grading the same submission twice keeps one grade row', async () => {
   assert.equal(store.grades.find(g => g.submission_id === submission.id).score, 90);
 });
 
+test('a student answering twice edits one submission instead of adding another', async () => {
+  const teacher = await makeUser('teacher', 'resub-teacher@test.local');
+  const student = await makeUser('student', 'resub@test.local');
+  const course = await store.createCourse({ slug: 'resub-course', title_en: 'Resub course', is_published: true, teacher_id: teacher.id });
+  const assignment = await store.createAssignment({ course_id: course.id, teacher_id: teacher.id, title: 'Essay' });
+  await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'active' });
+  const token = await login(student.email);
+  const first = await call('/api/submissions', { method: 'POST', token, body: { assignment_id: assignment.id, content_text: 'First try' } });
+  const second = await call('/api/submissions', { method: 'POST', token, body: { assignment_id: assignment.id, content_text: 'Second try' } });
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 200);
+  assert.equal(first.data.submission.id, second.data.submission.id);
+  assert.equal(store.submissions.filter(s => s.assignment_id === assignment.id && s.student_id === student.id).length, 1);
+
+  // The revised answer has not been marked yet, and the student's list shows it once.
+  const teacherToken = await login(teacher.email);
+  assert.equal((await call(`/api/submissions/${second.data.submission.id}/grade`, { method: 'POST', token: teacherToken, body: { grade: 80 } })).status, 200);
+  const again = await call('/api/submissions', { method: 'POST', token, body: { assignment_id: assignment.id, content_text: 'Third try' } });
+  assert.equal(again.status, 200);
+  assert.equal(again.data.submission.grade, null);
+  const list = await call('/api/assignments', { token });
+  const mine = list.data.assignments.filter(a => a.id === assignment.id);
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].submission.content_text, 'Third try');
+});
+
 test('placement test scores 20 answers on the server', async () => {
   const student = await makeUser('student', 'placement@test.local');
   const token = await login(student.email);

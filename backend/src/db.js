@@ -10,7 +10,7 @@ const DEMO_LEVELS = [
   { code: 'A1', name_en: 'Beginner', name_ar: 'مبتدئ', order_no: 1, description_en: 'First steps: greetings, everyday words, simple sentences.', description_ar: 'خطوات أولى: تحيات وكلمات يومية وجمل بسيطة.' },
   { code: 'A2', name_en: 'Elementary', name_ar: 'ابتدائي', order_no: 2, description_en: 'Everyday conversation, routine topics, short messages.', description_ar: 'محادثة يومية ومواضيع روتينية ورسائل قصيرة.' },
   { code: 'B1', name_en: 'Intermediate', name_ar: 'متوسط', order_no: 3, description_en: 'Opinions, stories, travel and work situations.', description_ar: 'آراء وقصص ومواقف سفر وعمل.' },
-  { code: 'B2', name_en: 'Upper Intermediate', name_ar: 'فوق المتوسط', order_no: 4, description_en: 'Debate, presentations, clear writing for study and work.', description_ar: 'نقاش وعروض وكتابة واضحة للدراسة والعمل.' },
+  { code: 'B2', name_en: 'Upper intermediate', name_ar: 'فوق المتوسط', order_no: 4, description_en: 'Debate, presentations, clear writing for study and work.', description_ar: 'نقاش وعروض وكتابة واضحة للدراسة والعمل.' },
   { code: 'C1', name_en: 'Advanced', name_ar: 'متقدم', order_no: 5, description_en: 'Fluent, flexible English for academic and professional use.', description_ar: 'إنجليزية طليقة ومرنة للاستخدام الأكاديمي والمهني.' },
   { code: 'C2', name_en: 'Proficiency', name_ar: 'إتقان', order_no: 6, description_en: 'Near-native precision across complex topics.', description_ar: 'دقة قريبة من الناطقين الأصليين في مواضيع معقدة.' },
 ];
@@ -30,7 +30,13 @@ class MemoryStore {
     this.users = []; this.courses = []; this.levels = [...DEMO_LEVELS.map((l, i) => ({ id: `level-${l.code}`, ...l }))];
     this.lessons = []; this.enrolments = []; this.placements = []; this.assignments = [];
     this.submissions = []; this.grades = []; this.attendance = []; this.announcements = []; this.payments = []; this.bookingRequests = [];
-    this.courses = DEMO_COURSES.map((c) => ({ id: `course-${c.slug}`, teacher_id: null, ...c, created_at: now() }));
+    // level_id, not level_code: the API and the frontend both speak level_id,
+    // so the demo store must look the same as Postgres or local testing
+    // misrepresents what production shows.
+    this.courses = DEMO_COURSES.map((c) => {
+      const lvl = this.levels.find((l) => l.code === c.level_code);
+      return { id: `course-${c.slug}`, teacher_id: null, ...c, level_id: lvl ? lvl.id : null, created_at: now() };
+    });
   }
   async findUserByEmail(e) { return this.users.find(u => u.email === e.toLowerCase()) || null; }
   async findUserByUsername(u) { return this.users.find(x => x.username && x.username === String(u).toLowerCase()) || null; }
@@ -88,7 +94,20 @@ class MemoryStore {
     const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
     return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   }
-  async createSubmission(s) { const r = { id: uid(), grade: null, feedback: null, created_at: now(), ...s }; this.submissions.push(r); return r; }
+  // One submission per (assignment, student): a student who answers again is
+  // editing their answer, not adding a second one. The reset grade is
+  // deliberate — the new text has not been marked yet.
+  async createSubmission(s) {
+    const existing = this.submissions.find(x => x.assignment_id === s.assignment_id && x.student_id === s.student_id);
+    if (existing) {
+      existing.content_text = s.content_text || null;
+      existing.content_url = s.content_url || null;
+      existing.grade = null; existing.feedback = null;
+      return { ...existing, created: false };
+    }
+    const r = { id: uid(), grade: null, feedback: null, created_at: now(), ...s, created: true };
+    this.submissions.push(r); return r;
+  }
   async getSubmission(id) { return this.submissions.find(s => s.id === id) || null; }
   async listSubmissions(assignmentId, teacherId) {
     let rows = this.submissions.filter(s => !assignmentId || s.assignment_id === assignmentId);
@@ -163,7 +182,16 @@ class PgStore {
     return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, created_at: r.submitted_at } : null }));
   }
   async listAssignmentsForTeacher(teacherId) { return this.q('SELECT a.* FROM assignments a JOIN courses c ON c.id=a.course_id WHERE c.teacher_id=$1 ORDER BY a.created_at DESC', [teacherId]); }
-  async createSubmission(s) { return (await this.q('INSERT INTO submissions (assignment_id,student_id,content_url,content_text) VALUES ($1,$2,$3,$4) RETURNING *', [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null]))[0]; }
+  // ON CONFLICT needs submissions_assignment_student_unique (migration 007).
+  // xmax = 0 is true only for a fresh insert, which is how the route tells
+  // '201 created' from '200 updated' without a second query.
+  async createSubmission(s) {
+    const row = (await this.q(
+      'INSERT INTO submissions (assignment_id,student_id,content_url,content_text) VALUES ($1,$2,$3,$4) ON CONFLICT (assignment_id,student_id) DO UPDATE SET content_url=EXCLUDED.content_url, content_text=EXCLUDED.content_text, grade=NULL, feedback=NULL, created_at=now() RETURNING *, (xmax = 0) AS created',
+      [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null]))[0];
+    const created = row.created; delete row.created;
+    return { ...row, created };
+  }
   async getSubmission(id) { return (await this.q('SELECT * FROM submissions WHERE id=$1', [id]))[0] || null; }
   async listSubmissions(assignmentId, teacherId) {
     const where = []; const vals = [];

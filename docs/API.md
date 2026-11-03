@@ -68,7 +68,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 |---|---|---|---|---|
 | POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date? }` | 201 `{ assignment }` |
 | GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role) |
-| POST | `/api/submissions` | student | `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` |
+| POST | `/api/submissions` | student | `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` on the first answer, 200 when the student revises it — one submission per assignment per student, and revising clears the old grade |
 | GET | `/api/submissions?assignment_id=` | teacher, admin | — | `{ submissions: [...] }` |
 | POST | `/api/submissions/:id/grade` | teacher, admin | `{ grade: 0-100, feedback? }` | `{ submission }` (also mirrored to `grades`) |
 

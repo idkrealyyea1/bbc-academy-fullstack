@@ -281,7 +281,11 @@ app.post('/api/submissions', auth, roles('student'), wrap(async (req, res) => {
   const assignment = await store.getAssignment(req.body.assignment_id);
   if (!assignment) return bad(res, 404, 'Assignment not found');
   if (!(await store.isEnrolled(req.user.id, assignment.course_id))) return bad(res, 403, 'You are not enrolled in this course');
-  return ok(res, { submission: await store.createSubmission({ assignment_id: assignment.id, student_id: req.user.id, content_text: req.body.content_text || null, content_url: req.body.content_url || null }) }, 201);
+  // 201 the first time, 200 when the student revises an existing answer.
+  const submission = await store.createSubmission({ assignment_id: assignment.id, student_id: req.user.id, content_text: req.body.content_text || null, content_url: req.body.content_url || null });
+  const created = submission.created !== false;
+  delete submission.created;
+  return ok(res, { submission }, created ? 201 : 200);
 }));
 app.get('/api/submissions', auth, roles('admin', 'teacher'), wrap(async (req, res) => ok(res, { submissions: await store.listSubmissions(req.query.assignment_id || null, req.user.role === 'teacher' ? req.user.id : null) })));
 app.post('/api/submissions/:id/grade', auth, roles('admin', 'teacher'), wrap(async (req, res) => {
