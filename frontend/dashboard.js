@@ -66,7 +66,7 @@
 
   // Section wrapper with heading and action buttons at the end
   function sectionWithButtons(titleEn, titleAr, content, buttonHtml) {
-    return '<div style="margin-top:2rem"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2>' + h(t(titleEn, titleAr)) + '</h2>' + content + (buttonHtml ? '<div style="margin-top:1rem">' + buttonHtml + '</div>' '') : '') + '</div>';
+    return '<div style="margin-top:2rem"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2>' + h(t(titleEn, titleAr)) + '</h2>' + content + (buttonHtml ? '<div style="margin-top:1rem">' + buttonHtml + '</div>' : '') + '</div>';
   }
 
 
@@ -323,9 +323,10 @@
           + '<td><button class="btn small" data-save-course="' + h(c.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
       }), t('No courses yet.', 'لا توجد دورات بعد.')) + '</div>'
       + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Recent enrolments', 'أحدث التسجيلات')) + '</h3>'
-      + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة')], enr.slice(0, 20).map(function (e) {
+      + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], enr.slice(0, 20).map(function (e) {
         var c = cmap[e.course_id];
-        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td></tr>';
+        var approve = e.status === 'pending' ? '<button class="btn small" data-approve="' + h(e.id) + '">' + h(t('Approve', 'موافقة')) + '</button>' : '';
+        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td><td>' + approve + '</td></tr>';
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>';
 
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
@@ -337,6 +338,12 @@
     content.querySelectorAll('[data-reject]').forEach(function (b) {
       b.addEventListener('click', async function () {
         try { await api.req('/api/admin/booking-requests/' + b.dataset.reject, { method: 'PUT', body: { status: 'rejected' } }); location.reload(); }
+        catch (err) { alert(err.message); }
+      });
+    });
+    content.querySelectorAll('[data-approve]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        try { await api.req('/api/enrolments/' + b.dataset.approve, { method: 'PUT', body: { status: 'active' } }); location.reload(); }
         catch (err) { alert(err.message); }
       });
     });

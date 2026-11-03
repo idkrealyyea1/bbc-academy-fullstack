@@ -69,6 +69,7 @@ class MemoryStore {
     this.enrolments.push(r); return r;
   }
   async listEnrolmentsForUser(u) { return this.enrolments.filter(e => e.student_id === u).map(e => ({ ...e, student_name: (this.users.find(x => x.id === e.student_id) || {}).full_name || null })); }
+  async updateEnrolment(id, status) { const e = this.enrolments.find(x => x.id === id); if (!e) return null; e.status = status; return e; }
   async deleteEnrolment(id) { const i = this.enrolments.findIndex(e => e.id === id); if (i < 0) return false; this.enrolments.splice(i, 1); return true; }
   async listEnrolmentsAll(teacherId) {
     let rows = this.enrolments;
@@ -167,6 +168,7 @@ class PgStore {
   async isEnrolled(studentId, courseId) { return (await this.q('SELECT 1 FROM enrolments WHERE student_id=$1 AND course_id=$2 LIMIT 1', [studentId, courseId])).length > 0; }
   async createEnrolment(e) { return (await this.q('INSERT INTO enrolments (student_id,course_id,status) VALUES ($1,$2,$3) RETURNING *', [e.student_id, e.course_id, e.status || 'pending']))[0]; }
   async listEnrolmentsForUser(u) { return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e LEFT JOIN profiles p ON p.id=e.student_id WHERE e.student_id=$1 ORDER BY e.created_at DESC', [u]); }
+  async updateEnrolment(id, status) { return (await this.q('UPDATE enrolments SET status=$2 WHERE id=$1 RETURNING *', [id, status]))[0] || null; }
   async deleteEnrolment(id) { const r = await this.pool.query('DELETE FROM enrolments WHERE id=$1', [id]); return r.rowCount > 0; }
   async listEnrolmentsAll(teacherId) {
     if (teacherId) return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e JOIN courses c ON c.id=e.course_id LEFT JOIN profiles p ON p.id=e.student_id WHERE c.teacher_id=$1 ORDER BY e.created_at DESC', [teacherId]);

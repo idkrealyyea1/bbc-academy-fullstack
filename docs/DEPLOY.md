@@ -3,8 +3,12 @@
 LIVE 2026-11-03: Supabase project `bbc-academy`, Render `https://bbc-academy-fullstack.onrender.com`
 (/api/health store: postgres), Cloudflare Pages `https://bbc-academy.pages.dev/` with
 API_BASE_URL set to the Render URL. Migrations 001-004 applied;
-**005_fixes.sql must be applied** — the current API writes
-`booking_requests.email` and upserts `grades` on `submission_id`. SEED_DEMO=false in production.
+**005_fixes.sql, 006_levels.sql and 007_submissions_unique.sql must all be
+applied** — the current API writes `booking_requests.email` and upserts
+`grades` on `submission_id` (005), needs the six CEFR levels as reference data
+(006), and upserts submissions on `(assignment_id, student_id)` (007).
+Without 007 every homework submission fails; without 006 courses carry no
+level. SEED_DEMO=false in production.
 
 ## 1. Supabase — database
 
@@ -20,6 +24,11 @@ API_BASE_URL set to the Render URL. Migrations 001-004 applied;
    - `db/migrations/005_fixes.sql` — adds `booking_requests.email` and makes
      `grades` one row per submission. The API needs both; without it, booking
      requests and grading fail.
+   - `db/migrations/006_levels.sql` — seeds the six CEFR levels. Without it,
+     courses have no level and the level filters match nothing.
+   - `db/migrations/007_submissions_unique.sql` — one submission per
+     (assignment, student). The API upserts on this key; without it,
+     submitting homework fails.
    - `db/supabase/seed.sql` — demo data only. Skip on a production project
      until the owner confirms the demo catalogue is wanted.
 4. **Auth users:** create real users one of these ways (do NOT use the

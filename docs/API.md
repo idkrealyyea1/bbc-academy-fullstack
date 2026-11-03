@@ -14,7 +14,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | Public (20/hour per IP) | `{ email, password (≥8), full_name, username? (3-30 chars: letters, digits, `_` or `.`), role?: "student" }` — the public form is student-only. `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY`; `role: "teacher"` is rejected (teachers must be created by an admin, see `/api/admin/users`); duplicate email or username → 409 | 201 `{ user, token }` |
+| POST | `/api/auth/register` | Gated: header `x-admin-setup-key` must match `ADMIN_SETUP_KEY` (20/hour per IP) | `{ email, password (≥8), full_name, username? (3-30 chars: letters, digits, `_` or `.`), role?: "student" }` — without the key the endpoint is closed (students never self-register; an admin creates accounts, see `/api/admin/users`). `role: "admin"` needs the same key; `role: "teacher"` is rejected (teachers must be created by an admin); duplicate email or username → 409 | 201 `{ user, token }` |
 | POST | `/api/auth/login` | Public | `{ email, password }` **or** `{ username, password }` — an identifier without `@` is treated as a username; wrong identifier/password → generic 401 | `{ user, token }` |
 | GET | `/api/auth/me` | Any role | — | `{ user }` |
 
@@ -54,6 +54,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | GET | `/api/enrolments/me` | Any role | — | `{ enrolments: [...] }` |
 | GET | `/api/enrolments` | teacher, admin | — | admin: all; teacher: only enrolments for courses they teach (`courses.teacher_id = teacher id`), filtered server-side; enrolments include `student_name` | `{ enrolments: [...] }` |
 | DELETE | `/api/enrolments/:id` | admin | — | `{ deleted: true }` |
+| PUT | `/api/enrolments/:id` | admin | `{ status: "pending" \| "active" \| "completed" \| "cancelled" }` — approves a pending enrolment (or changes its status) | `{ enrolment }` |
 
 ## Placement tests
 

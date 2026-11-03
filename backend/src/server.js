@@ -15,7 +15,15 @@ const app = express();
 // Render (and most hosts) put a proxy in front. Without this, every visitor
 // shares one rate-limit bucket and the API logs a validation error per request.
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  next();
+});
 const origins = (process.env.CORS_ORIGIN || 'http://localhost:8000,http://localhost:5173').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({ origin: (o, cb) => (!o || origins.includes(o) ? cb(null, true) : cb(new Error('CORS origin not allowed'))), credentials: true }));
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true }));
@@ -46,17 +54,30 @@ function todayInAcademyTz() {
 const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, standardHeaders: true });
 function publicUser(u) { if (!u) return null; const { password_hash, ...rest } = u; return rest; }
 function sign(u) { return jwt.sign({ id: u.id, email: u.email, role: u.role }, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }); }
-function auth(req, res, next) {
+async function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const t = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!t) return bad(res, 401, 'Missing token');
-  try { req.user = jwt.verify(t, JWT_SECRET); next(); } catch { return bad(res, 401, 'Invalid or expired token'); }
+  try {
+    const payload = jwt.verify(t, JWT_SECRET);
+    // The JWT role is up to 7 days old: re-read the user so a deleted or
+    // demoted account loses access immediately instead of at token expiry.
+    const u = await store.getUser(payload.id);
+    if (!u) return bad(res, 401, 'Invalid or expired token');
+    req.user = { id: u.id, email: u.email, role: u.role };
+    next();
+  } catch { return bad(res, 401, 'Invalid or expired token'); }
 }
 function optionalAuth(req, res, next) {
   const h = req.headers.authorization || '';
   const t = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (t) { try { req.user = jwt.verify(t, JWT_SECRET); } catch { /* treat as anonymous */ } }
-  next();
+  if (!t) return next();
+  let payload;
+  try { payload = jwt.verify(t, JWT_SECRET); } catch { return next(); }
+  store.getUser(payload.id).then(u => {
+    if (u) req.user = { id: u.id, email: u.email, role: u.role };
+    next();
+  }).catch(() => next());
 }
 const roles = (...r) => (req, res, next) => (req.user && r.includes(req.user.role) ? next() : bad(res, 403, 'Forbidden for this role'));
 const canManageCourse = (user, course) => !!user && (user.role === 'admin' || (user.role === 'teacher' && course.teacher_id === user.id));
@@ -72,6 +93,11 @@ app.get('/', (req, res) => res.json({ name: 'BBC English Academy API', health: '
 
 // --- Auth ---
 app.post('/api/auth/register', registerLimiter, wrap(async (req, res) => {
+  // Booking-only policy: students apply via booking and an admin creates the
+  // account, so public registration is closed unless the caller holds the
+  // admin setup key (the same key that bootstraps the first admin).
+  const setupKey = process.env.ADMIN_SETUP_KEY;
+  if (!setupKey || req.headers['x-admin-setup-key'] !== setupKey) return bad(res, 403, 'Registration is closed: accounts are created by an admin');
   const { email, password, full_name, role } = req.body || {};
   if (!isEmail(email)) return bad(res, 400, 'Valid email required');
   if (typeof password !== 'string' || password.length < 8) return bad(res, 400, 'Password must be at least 8 characters');
@@ -143,6 +169,8 @@ app.get('/api/courses/:id', optionalAuth, wrap(async (req, res) => {
 app.post('/api/courses', auth, roles('admin', 'teacher'), wrap(async (req, res) => {
   const b = req.body || {};
   if (!reqStr(b, 'slug', 100) || !reqStr(b, 'title_en', 200)) return bad(res, 400, 'slug and title_en required');
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(b.slug.trim())) return bad(res, 400, 'slug must be lowercase letters, digits and hyphens only');
+  if ((await store.listCourses()).some(c => c.slug === b.slug.trim())) return bad(res, 409, 'Slug already exists');
   const c = await store.createCourse({
     slug: b.slug.trim(), level_id: b.level_id || null, title_en: b.title_en.trim(), title_ar: b.title_ar || null,
     description_en: b.description_en || null, description_ar: b.description_ar || null, duration_weeks: b.duration_weeks || null,
@@ -168,6 +196,10 @@ app.put('/api/courses/:id', auth, roles('admin', 'teacher'), wrap(async (req, re
       if (!t || t.role !== 'teacher') return bad(res, 400, 'teacher_id must be an existing teacher');
     }
     patch.teacher_id = next;
+  }
+  if (patch.slug !== undefined) {
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(patch.slug)) return bad(res, 400, 'slug must be lowercase letters, digits and hyphens only');
+    if ((await store.listCourses()).some(x => x.slug === patch.slug && x.id !== c.id)) return bad(res, 409, 'Slug already exists');
   }
   const updated = await store.updateCourse(c.id, patch);
   return ok(res, { course: updated });
@@ -239,6 +271,12 @@ app.post('/api/enrolments', auth, roles('student', 'admin'), wrap(async (req, re
   return ok(res, { enrolment: await store.createEnrolment({ student_id: student.id, course_id: course.id, status }) }, 201);
 }));
 app.get('/api/enrolments/me', auth, wrap(async (req, res) => ok(res, { enrolments: await store.listEnrolmentsForUser(req.user.id) })));
+app.put('/api/enrolments/:id', auth, roles('admin'), wrap(async (req, res) => {
+  const status = req.body?.status;
+  if (!['pending', 'active', 'completed', 'cancelled'].includes(status)) return bad(res, 400, 'status must be pending, active, completed or cancelled');
+  const updated = await store.updateEnrolment(req.params.id, status);
+  return updated ? ok(res, { enrolment: updated }) : bad(res, 404, 'Enrolment not found');
+}));
 app.get('/api/enrolments', auth, roles('admin', 'teacher'), wrap(async (req, res) => ok(res, { enrolments: await store.listEnrolmentsAll(req.user.role === 'teacher' ? req.user.id : null) })));
 app.delete('/api/enrolments/:id', auth, roles('admin'), wrap(async (req, res) => (await store.deleteEnrolment(req.params.id) ? ok(res, { deleted: true }) : bad(res, 404, 'Enrolment not found'))));
 
@@ -328,9 +366,9 @@ app.get('/api/announcements', optionalAuth, wrap(async (req, res) => {
 }));
 
 // --- Payments: PLACEHOLDER ONLY — records an intent/status, no provider, no money ---
-app.post('/api/payments', auth, wrap(async (req, res) => {
+app.post('/api/payments', auth, roles('admin'), wrap(async (req, res) => {
   if (req.body.amount !== undefined && req.body.amount !== null && (typeof req.body.amount !== 'number' || req.body.amount < 0)) return bad(res, 400, 'Invalid amount');
-  return ok(res, { payment: await store.createPayment({ student_id: req.user.id, course_id: req.body.course_id || null, amount: req.body.amount ?? null, currency: req.body.currency || 'ILS', status: 'pending', provider_ref: null }), note: 'PLACEHOLDER: no payment provider is connected and no money moves. The owner must choose a provider before launch.' }, 201);
+  return ok(res, { payment: await store.createPayment({ student_id: req.body.student_id || req.user.id, course_id: req.body.course_id || null, amount: req.body.amount ?? null, currency: req.body.currency || 'ILS', status: 'pending', provider_ref: null }), note: 'PLACEHOLDER: no payment provider is connected and no money moves. The owner must choose a provider before launch.' }, 201);
 }));
 app.get('/api/payments/me', auth, wrap(async (req, res) => ok(res, { payments: await store.listPaymentsForUser(req.user.id) })));
 app.get('/api/payments', auth, roles('admin'), wrap(async (req, res) => ok(res, { payments: await store.listPaymentsAll() })));

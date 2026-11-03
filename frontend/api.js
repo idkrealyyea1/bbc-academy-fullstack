@@ -140,7 +140,12 @@
           if (typeof COURSES !== 'undefined') { COURSES.splice(0, COURSES.length); mapped.forEach(function (c) { COURSES.push(c); }); }
           if (mapped.length) renderCourses(window.__filter || 'all', lang());
           else empty(document.getElementById('courseGrid'), 'No courses are published yet.', 'لا توجد دورات منشورة بعد.');
-        } catch (err) { /* API unreachable: keep the catalogue already on the page */ }
+        } catch (err) {
+          // Connected mode: the demo catalogue is not real data. Never leave
+          // it standing when the API failed — show the failure instead.
+          var grid = document.getElementById('courseGrid');
+          if (grid) grid.innerHTML = '<p class="api-error">' + esc(lang() === 'ar' ? 'تعذّر تحميل الدورات. حاول لاحقًا.' : 'Could not load courses. Please try again later.') + '</p>';
+        }
       })();
     }
 

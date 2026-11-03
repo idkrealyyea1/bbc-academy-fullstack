@@ -14,8 +14,8 @@ test.before(async () => {
 
 test.after(() => server.close());
 
-async function call(path, { method = 'GET', body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+async function call(path, { method = 'GET', body, token, headers: extraHeaders } = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(extraHeaders || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, data: await res.json().catch(() => ({})) };
@@ -229,4 +229,46 @@ test('an admin can remove an enrolment', async () => {
   assert.equal(listed.data.enrolments.some(e => e.id === created.data.enrolment.id), false);
   const again = await call('/api/enrolments/' + created.data.enrolment.id, { method: 'DELETE', token });
   assert.equal(again.status, 404);
+});
+
+test('public registration is closed without the admin setup key', async () => {
+  const r = await call('/api/auth/register', {
+    method: 'POST',
+    body: { email: 'closed@test.local', password: 'Password1!', full_name: 'Closed', role: 'student' },
+  });
+  assert.equal(r.status, 403);
+});
+
+test('registration with the admin setup key still works (admin bootstrap)', async () => {
+  const prev = process.env.ADMIN_SETUP_KEY;
+  process.env.ADMIN_SETUP_KEY = 'test-setup-key';
+  try {
+    const r = await call('/api/auth/register', {
+      method: 'POST',
+      headers: { 'x-admin-setup-key': 'test-setup-key' },
+      body: { email: 'boot@test.local', password: 'Password1!', full_name: 'Boot', role: 'student' },
+    });
+    assert.equal(r.status, 201);
+  } finally {
+    if (prev === undefined) delete process.env.ADMIN_SETUP_KEY;
+    else process.env.ADMIN_SETUP_KEY = prev;
+  }
+});
+
+test('an admin can approve a pending enrolment, a student cannot', async () => {
+  const admin = await makeUser('admin', 'approver@test.local');
+  const student = await makeUser('student', 'pending@test.local');
+  const token = await login(admin.email);
+  const studentToken = await login(student.email);
+  const course = store.courses[0];
+  const created = await call('/api/enrolments', { method: 'POST', token: studentToken, body: { course_id: course.id } });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.enrolment.status, 'pending');
+  const asStudent = await call(`/api/enrolments/${created.data.enrolment.id}`, { method: 'PUT', token: studentToken, body: { status: 'active' } });
+  assert.equal(asStudent.status, 403);
+  const approved = await call(`/api/enrolments/${created.data.enrolment.id}`, { method: 'PUT', token, body: { status: 'active' } });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.enrolment.status, 'active');
+  const missing = await call('/api/enrolments/no-such-id', { method: 'PUT', token, body: { status: 'active' } });
+  assert.equal(missing.status, 404);
 });
