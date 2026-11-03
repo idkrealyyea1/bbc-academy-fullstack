@@ -20,6 +20,15 @@
     if (e.persisted) overlay.classList.add('pt-hidden');
   });
 
+  // Fallback: if the load handler never fires (JS disabled / slow env), hide
+  // the overlay so the page is still readable.
+  document.addEventListener('DOMContentLoaded', function () {
+    overlay.classList.add('pt-hidden');
+  });
+
+  // Fallback: mark JS-ready so a CSS rule hides the overlay immediately.
+  document.body.classList.add('js-ready');
+
   document.addEventListener('click', function (e) {
     var link = e.target.closest ? e.target.closest('a') : null;
     if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

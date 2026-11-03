@@ -30,3 +30,8 @@
   .page-transition { display: none; }
   .pt-panel, .pt-content { transition: none; animation: none; }
 }
+/* JS fallback: hide the overlay as soon as JS is running, if the load
+   handler is still pending. Combined with DOMContentLoaded above. */
+.page-transition { display: block; }
+body.js-ready .page-transition,
+.page-transition.pt-hidden { display: none; }

@@ -4,10 +4,11 @@ const menuToggle = document.querySelector('#menu-toggle');
 const form = document.querySelector('#enrollment-form');
 const successMessage = document.querySelector('#form-success');
 
-let language = 'ar';
+let language = localStorage.getItem('bbc-lang') === 'en' ? 'en' : 'ar';
 
 function setLanguage(nextLanguage) {
   language = nextLanguage;
+  localStorage.setItem('bbc-lang', language);
   document.documentElement.lang = language;
   document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   document.body.lang = language;
@@ -18,7 +19,15 @@ function setLanguage(nextLanguage) {
 
   document.querySelectorAll('[data-ar][data-en]').forEach((element) => {
     const translated = element.dataset[language];
-    if (translated !== undefined) element.innerHTML = translated;
+    if (translated === undefined) return;
+    // Copy with <br>/<em> is authored HTML and needs innerHTML. Otherwise only
+    // replace the text so child icons/arrows survive translation.
+    if (element.children.length && !translated.includes('<')) {
+      const textNode = Array.from(element.childNodes).find((n) => n.nodeType === 3 && n.textContent.trim());
+      if (textNode) textNode.textContent = translated;
+    } else {
+      element.innerHTML = translated;
+    }
   });
   document.querySelectorAll('[data-alt-ar][data-alt-en]').forEach((image) => {
     image.alt = image.dataset[language === 'ar' ? 'altAr' : 'altEn'];
@@ -31,8 +40,10 @@ function setLanguage(nextLanguage) {
 
   document.querySelector('#name').placeholder = language === 'ar' ? 'الاسم الكامل' : 'Your full name';
   document.querySelector('#message').placeholder = language === 'ar' ? 'ما الذي تأمل أن تحققه؟' : 'What would you like to achieve?';
-  document.querySelector('#phone').placeholder = '+966 5X XXX XXXX';
+  document.querySelector('#phone').placeholder = '+970 5X XXX XXXX';
 }
+
+setLanguage(language);
 
 languageToggle.addEventListener('click', () => setLanguage(language === 'ar' ? 'en' : 'ar'));
 
@@ -78,6 +89,7 @@ document.querySelectorAll('.course-more').forEach((button) => {
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   if (!form.reportValidity()) return;
+  if (window.BBC_API && window.BBC_API.base()) return; // api.js sends the real request
   successMessage.classList.add('visible');
   successMessage.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
 });
