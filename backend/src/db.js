@@ -33,9 +33,10 @@ class MemoryStore {
     this.courses = DEMO_COURSES.map((c) => ({ id: `course-${c.slug}`, teacher_id: null, ...c, created_at: now() }));
   }
   async findUserByEmail(e) { return this.users.find(u => u.email === e.toLowerCase()) || null; }
+  async findUserByUsername(u) { return this.users.find(x => x.username && x.username === String(u).toLowerCase()) || null; }
   async getUser(id) { return this.users.find(u => u.id === id) || null; }
   async listUsers() { return this.users; }
-  async createUser(u) { const r = { id: uid(), created_at: now(), ...u, email: u.email.toLowerCase() }; this.users.push(r); return r; }
+  async createUser(u) { const r = { id: uid(), created_at: now(), ...u, username: u.username ? String(u.username).toLowerCase() : null, email: u.email.toLowerCase() }; this.users.push(r); return r; }
   async updateUser(id, p) { const u = await this.getUser(id); if (!u) return null; Object.assign(u, p); return u; }
   async listLevels() { return [...this.levels].sort((a, b) => a.order_no - b.order_no); }
   async listCourses() { return this.courses; }
@@ -61,7 +62,8 @@ class MemoryStore {
     const r = { id: uid(), created_at: now(), ...e, status: e.status || 'pending' };
     this.enrolments.push(r); return r;
   }
-  async listEnrolmentsForUser(u) { return this.enrolments.filter(e => e.student_id === u); }
+  async listEnrolmentsForUser(u) { return this.enrolments.filter(e => e.student_id === u).map(e => ({ ...e, student_name: (this.users.find(x => x.id === e.student_id) || {}).full_name || null })); }
+  async deleteEnrolment(id) { const i = this.enrolments.findIndex(e => e.id === id); if (i < 0) return false; this.enrolments.splice(i, 1); return true; }
   async listEnrolmentsAll(teacherId) {
     let rows = this.enrolments;
     if (teacherId) {
@@ -128,9 +130,10 @@ class PgStore {
   constructor(pool) { this.pool = pool; }
   async q(t, v = []) { return (await this.pool.query(t, v)).rows; }
   async findUserByEmail(e) { return (await this.q('SELECT * FROM profiles WHERE email=$1', [e.toLowerCase()]))[0] || null; }
+  async findUserByUsername(u) { return (await this.q('SELECT * FROM profiles WHERE LOWER(username)=LOWER($1)', [u]))[0] || null; }
   async getUser(id) { return (await this.q('SELECT * FROM profiles WHERE id=$1', [id]))[0] || null; }
-  async listUsers() { return this.q('SELECT id,email,full_name,role,phone,created_at FROM profiles ORDER BY created_at'); }
-  async createUser(u) { return (await this.q('INSERT INTO profiles (email,full_name,password_hash,role,phone) VALUES ($1,$2,$3,$4,$5) RETURNING *', [u.email.toLowerCase(), u.full_name, u.password_hash, u.role, u.phone || null]))[0]; }
+  async listUsers() { return this.q('SELECT id,email,username,full_name,role,phone,created_at FROM profiles ORDER BY created_at'); }
+  async createUser(u) { return (await this.q('INSERT INTO profiles (email,username,full_name,password_hash,role,phone) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [u.email.toLowerCase(), u.username ? String(u.username).toLowerCase() : null, u.full_name, u.password_hash, u.role, u.phone || null]))[0]; }
   async updateUser(id, p) { const sets = []; const vals = []; let i = 1; for (const [k, v] of Object.entries(p)) { sets.push(`${k}=$${i++}`); vals.push(v); } if (!sets.length) return this.getUser(id); vals.push(id); return (await this.q(`UPDATE profiles SET ${sets.join(',')} WHERE id=$${i} RETURNING *`, vals))[0] || null; }
   async listLevels() { return this.q('SELECT * FROM levels ORDER BY order_no'); }
   async listCourses() { return this.q('SELECT * FROM courses ORDER BY created_at'); }
@@ -144,7 +147,8 @@ class PgStore {
   async createLesson(l) { return (await this.q('INSERT INTO lessons (course_id,title_en,title_ar,content_url,material_url,live_class_url,order_no) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [l.course_id, l.title_en, l.title_ar || null, l.content_url || null, l.material_url || null, l.live_class_url || null, l.order_no || 1]))[0]; }
   async isEnrolled(studentId, courseId) { return (await this.q('SELECT 1 FROM enrolments WHERE student_id=$1 AND course_id=$2 LIMIT 1', [studentId, courseId])).length > 0; }
   async createEnrolment(e) { return (await this.q('INSERT INTO enrolments (student_id,course_id,status) VALUES ($1,$2,$3) RETURNING *', [e.student_id, e.course_id, e.status || 'pending']))[0]; }
-  async listEnrolmentsForUser(u) { return this.q('SELECT * FROM enrolments WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
+  async listEnrolmentsForUser(u) { return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e LEFT JOIN profiles p ON p.id=e.student_id WHERE e.student_id=$1 ORDER BY e.created_at DESC', [u]); }
+  async deleteEnrolment(id) { const r = await this.pool.query('DELETE FROM enrolments WHERE id=$1', [id]); return r.rowCount > 0; }
   async listEnrolmentsAll(teacherId) {
     if (teacherId) return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e JOIN courses c ON c.id=e.course_id LEFT JOIN profiles p ON p.id=e.student_id WHERE c.teacher_id=$1 ORDER BY e.created_at DESC', [teacherId]);
     return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e LEFT JOIN profiles p ON p.id=e.student_id ORDER BY e.created_at DESC');

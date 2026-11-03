@@ -52,8 +52,11 @@
     if (loginForm) loginForm.addEventListener('submit', async function (e) {
       e.preventDefault(); e.stopImmediatePropagation();
       var inputs = loginForm.querySelectorAll('input');
+      // One field, two identifiers: anything with an '@' is an email, anything
+      // else is a username (teachers are created with one).
+      var ident = inputs[0].value.trim();
       try {
-        var data = await req('/api/auth/login', { method: 'POST', body: { email: inputs[0].value.trim(), password: inputs[1].value } });
+        var data = await req('/api/auth/login', { method: 'POST', body: ident.indexOf('@') >= 0 ? { email: ident, password: inputs[1].value } : { username: ident, password: inputs[1].value } });
         localStorage.setItem('bbc-token', data.token);
         localStorage.setItem('bbc-user', JSON.stringify(data.user));
         var role = (data.user && data.user.role) || 'student';

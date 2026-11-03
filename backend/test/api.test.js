@@ -162,3 +162,45 @@ test('only an admin can move a course to another teacher', async () => {
   assert.equal(moved.status, 200);
   assert.equal(moved.data.course.teacher_id, teacherB.id);
 });
+
+test('teachers can be created with a username and sign in with it', async () => {
+  const admin = await makeUser('admin', 'uname-admin@test.local');
+  const token = await login(admin.email);
+  const created = await call('/api/admin/users', { method: 'POST', token, body: {
+    email: 'uname.teacher@test.local', username: 'Mr_Sami', password: 'Password1!', full_name: 'Sami', role: 'teacher',
+  }});
+  assert.equal(created.status, 201);
+  assert.equal(created.data.user.username, 'mr_sami');
+
+  const byUsername = await call('/api/auth/login', { method: 'POST', body: { username: 'mr_sami', password: 'Password1!' } });
+  assert.equal(byUsername.status, 200);
+  const bare = await call('/api/auth/login', { method: 'POST', body: { email: 'mr_sami', password: 'Password1!' } });
+  const byEmail = await call('/api/auth/login', { method: 'POST', body: { email: 'uname.teacher@test.local', password: 'Password1!' } });
+  assert.equal(bare.status, 200);
+  assert.equal(byEmail.status, 200);
+
+  const dupe = await call('/api/admin/users', { method: 'POST', token, body: {
+    email: 'other.teacher@test.local', username: 'mr_sami', password: 'Password1!', full_name: 'Other', role: 'teacher',
+  }});
+  assert.equal(dupe.status, 409);
+  const bad = await call('/api/admin/users', { method: 'POST', token, body: {
+    email: 'bad.teacher@test.local', username: 'no spaces!', password: 'Password1!', full_name: 'Bad', role: 'teacher',
+  }});
+  assert.equal(bad.status, 400);
+});
+
+test('an admin can remove an enrolment', async () => {
+  const admin = await makeUser('admin', 'del-admin@test.local');
+  const student = await makeUser('student', 'del-student@test.local');
+  const course = await store.createCourse({ slug: 'del-course', title_en: 'Del', is_published: true });
+  const token = await login(admin.email);
+  const created = await call('/api/enrolments', { method: 'POST', token, body: { student_id: student.id, course_id: course.id } });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.enrolment.status, 'active');
+  const removed = await call('/api/enrolments/' + created.data.enrolment.id, { method: 'DELETE', token });
+  assert.equal(removed.status, 200);
+  const listed = await call('/api/enrolments', { token });
+  assert.equal(listed.data.enrolments.some(e => e.id === created.data.enrolment.id), false);
+  const again = await call('/api/enrolments/' + created.data.enrolment.id, { method: 'DELETE', token });
+  assert.equal(again.status, 404);
+});

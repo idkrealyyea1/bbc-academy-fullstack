@@ -14,8 +14,8 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | Public (20/hour per IP) | `{ email, password (≥8), full_name, role?: "student" }` — the public form is student-only. `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY`; `role: "teacher"` is rejected (teachers must be created by an admin, see `/api/admin/users`) | 201 `{ user, token }` |
-| POST | `/api/auth/login` | Public | `{ email, password }` | `{ user, token }` |
+| POST | `/api/auth/register` | Public (20/hour per IP) | `{ email, password (≥8), full_name, username? (3-30 chars: letters, digits, `_` or `.`), role?: "student" }` — the public form is student-only. `role: "admin"` needs header `x-admin-setup-key` matching `ADMIN_SETUP_KEY`; `role: "teacher"` is rejected (teachers must be created by an admin, see `/api/admin/users`); duplicate email or username → 409 | 201 `{ user, token }` |
+| POST | `/api/auth/login` | Public | `{ email, password }` **or** `{ username, password }` — an identifier without `@` is treated as a username; wrong identifier/password → generic 401 | `{ user, token }` |
 | GET | `/api/auth/me` | Any role | — | `{ user }` |
 
 `user` never includes `password_hash`.
@@ -36,7 +36,7 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | GET | `/api/courses` | Public | — | `{ courses: [...] }` |
 | GET | `/api/courses/:id` | Public | id = uuid or slug | `{ course }` |
 | POST | `/api/courses` | teacher, admin | `{ slug, title_en, title_ar?, description_en?, description_ar?, duration_weeks?, level_id?, teacher_id? }` — `price_amount` is always stored NULL (TODO for owner) | 201 `{ course }` |
-| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored). `teacher_id` is admin-only (a teacher sending it gets 403) | `{ course }` |
+| PUT | `/api/courses/:id` | teacher, admin | partial course fields (price ignored). A teacher may only edit a course they teach (403 otherwise); `teacher_id` is admin-only (a teacher sending it gets 403) | `{ course }` |
 | DELETE | `/api/courses/:id` | admin | — | `{ deleted: true }` |
 
 ## Lessons
@@ -50,9 +50,10 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/enrolments` | student, admin | `{ course_id }` | 201 `{ enrolment }` (status `pending`) |
+| POST | `/api/enrolments` | student, admin | `{ course_id }` for a student (status `pending`, self only — 403 if `student_id` differs); admin may pass `student_id` (must exist, 404 otherwise) and the enrolment is created `active` | 201 `{ enrolment }` |
 | GET | `/api/enrolments/me` | Any role | — | `{ enrolments: [...] }` |
-| GET | `/api/enrolments` | teacher, admin | — | `{ enrolments: [...] }` |
+| GET | `/api/enrolments` | teacher, admin | — | admin: all; teacher: only enrolments for courses they teach (`courses.teacher_id = teacher id`), filtered server-side; enrolments include `student_name` | `{ enrolments: [...] }` |
+| DELETE | `/api/enrolments/:id` | admin | — | `{ deleted: true }` |
 
 ## Placement tests
 
@@ -103,10 +104,21 @@ The admin confirms a request, then creates the student account — students neve
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes) |
-| POST | `/api/admin/users` | admin | `{ email, password (≥8), full_name, role: "student" \| "teacher" \| "admin" }` | 201 `{ user }` |
-| PUT | `/api/admin/users/:id` | admin | `{ full_name?, phone?, role?, password? (≥8, resets the password) }` — an admin cannot remove their own admin role | `{ user }` |
+| GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes; includes `username`) |
+| POST | `/api/admin/users` | admin | `{ email, password (≥8), full_name, role: "student" \| "teacher" \| "admin", username? }` | 201 `{ user }` |
+| PUT | `/api/admin/users/:id` | admin | `{ full_name?, phone?, role?, password? (≥8, resets the password), username? (null clears it) }` — an admin cannot remove their own admin role | `{ user }` |
 | POST | `/api/admin/enrolments` | admin | `{ student_id, course_id, status?: "pending" \| "active" \| "completed" \| "cancelled" }` | 201 `{ enrolment }` |
+
+## Migrations
+
+`db/migrations/005_usernames.sql` adds `profiles.username` (nullable) plus a
+unique index on it (many NULLs allowed, so existing users are unaffected).
+
+**Deployment order — migrations FIRST, code second:** run
+`005_usernames.sql` (and `005_fixes.sql` if it is not applied yet) in the
+Supabase SQL Editor and confirm they succeed *before* deploying code that
+writes `username` or `booking_requests.email`. Otherwise those writes fail on
+Postgres with a missing-column 500.
 
 The admin confirms a booking request and creates the student account here — students never self-register.
 

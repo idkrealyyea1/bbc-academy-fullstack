@@ -31,6 +31,13 @@ const pick = (o, keys) => keys.reduce((r, k) => { if (o[k] !== undefined) r[k] =
 // is computed in the academy's time zone, never from the server clock.
 const ACADEMY_TZ = process.env.ACADEMY_TIMEZONE || 'Asia/Gaza';
 const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+// Teachers sign in with a username. Returns null when absent, false when
+// present but invalid, otherwise the normalised value.
+function normaliseUsername(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const u = String(v).trim().toLowerCase();
+  return /^[a-z0-9_.]{3,30}$/.test(u) ? u : false;
+}
 function todayInAcademyTz() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: ACADEMY_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
@@ -76,14 +83,23 @@ app.post('/api/auth/register', registerLimiter, wrap(async (req, res) => {
   } else if (wanted !== 'student') {
     return bad(res, 403, 'Teachers are created by an admin');
   }
+  const username = normaliseUsername(req.body && req.body.username);
+  if (username === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
   if (await store.findUserByEmail(email)) return bad(res, 409, 'Email already registered');
-  const user = await store.createUser({ email, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
+  if (username && await store.findUserByUsername(username)) return bad(res, 409, 'Username already taken');
+  const user = await store.createUser({ email, username, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
   return ok(res, { user: publicUser(user), token: sign(user) }, 201);
 }));
 app.post('/api/auth/login', wrap(async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!isEmail(email) || typeof password !== 'string') return bad(res, 400, 'Email and password required');
-  const user = await store.findUserByEmail(email);
+  const { email, username, password } = req.body || {};
+  if (typeof password !== 'string') return bad(res, 400, 'Email and password required');
+  // One identifier, two forms: an explicit username, an email value that has
+  // an '@', or (from the single login field) a bare string that is a username.
+  let user = null;
+  if (username) user = await store.findUserByUsername(String(username).trim());
+  else if (typeof email === 'string' && email.includes('@')) { if (!isEmail(email)) return bad(res, 400, 'Email and password required'); user = await store.findUserByEmail(email); }
+  else if (typeof email === 'string' && email.trim()) user = await store.findUserByUsername(email.trim());
+  else return bad(res, 400, 'Email and password required');
   if (!user || !(await bcrypt.compare(password, user.password_hash || ''))) return bad(res, 401, 'Invalid email or password');
   return ok(res, { user: publicUser(user), token: sign(user) });
 }));
@@ -212,14 +228,19 @@ app.post('/api/enrolments', auth, roles('student', 'admin'), wrap(async (req, re
   if (!reqStr(req.body, 'course_id')) return bad(res, 400, 'course_id required');
   const course = await store.getCourse(req.body.course_id);
   if (!course) return bad(res, 404, 'Course not found');
+  if (req.user.role !== 'admin' && req.body.student_id && req.body.student_id !== req.user.id) return bad(res, 403, 'Students may only enrol themselves');
   const studentId = req.user.role === 'admin' && req.body.student_id ? req.body.student_id : req.user.id;
   const student = await store.getUser(studentId);
   if (!student || student.role !== 'student') return bad(res, 404, 'Student not found');
   if (req.user.role !== 'admin' && !course.is_published) return bad(res, 404, 'Course not found');
-  return ok(res, { enrolment: await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'pending' }) }, 201);
+  // A student enrolling themselves waits for the academy ('pending'); an admin
+  // enrolling someone is the academy acting, so it is 'active' immediately.
+  const status = req.user.role === 'admin' && req.body.student_id ? 'active' : 'pending';
+  return ok(res, { enrolment: await store.createEnrolment({ student_id: student.id, course_id: course.id, status }) }, 201);
 }));
 app.get('/api/enrolments/me', auth, wrap(async (req, res) => ok(res, { enrolments: await store.listEnrolmentsForUser(req.user.id) })));
 app.get('/api/enrolments', auth, roles('admin', 'teacher'), wrap(async (req, res) => ok(res, { enrolments: await store.listEnrolmentsAll(req.user.role === 'teacher' ? req.user.id : null) })));
+app.delete('/api/enrolments/:id', auth, roles('admin'), wrap(async (req, res) => (await store.deleteEnrolment(req.params.id) ? ok(res, { deleted: true }) : bad(res, 404, 'Enrolment not found'))));
 
 // --- Placement test: 20 questions, scored server-side ---
 // Must match the 20 questions in frontend/app.js (QUIZ_ANSWERS), in order.
@@ -319,8 +340,11 @@ app.post('/api/admin/users', auth, roles('admin'), wrap(async (req, res) => {
   if (!reqStr(req.body, 'full_name', 200)) return bad(res, 400, 'full_name required');
   const wanted = role || 'student';
   if (!['student', 'teacher', 'admin'].includes(wanted)) return bad(res, 400, 'role must be student, teacher or admin');
+  const username = normaliseUsername(req.body && req.body.username);
+  if (username === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
   if (await store.findUserByEmail(email)) return bad(res, 409, 'Email already registered');
-  const user = await store.createUser({ email, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
+  if (username && await store.findUserByUsername(username)) return bad(res, 409, 'Username already taken');
+  const user = await store.createUser({ email, username, full_name: full_name.trim(), role: wanted, password_hash: await bcrypt.hash(password, 10) });
   return ok(res, { user: publicUser(user) }, 201);
 }));
 app.put('/api/admin/users/:id', auth, roles('admin'), wrap(async (req, res) => {
@@ -338,6 +362,13 @@ app.put('/api/admin/users/:id', auth, roles('admin'), wrap(async (req, res) => {
   if (b.password !== undefined) {
     if (typeof b.password !== 'string' || b.password.length < 8) return bad(res, 400, 'Password must be at least 8 characters');
     patch.password_hash = await bcrypt.hash(b.password, 10);
+  }
+  if (b.username !== undefined) {
+    const next = normaliseUsername(b.username);
+    if (next === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
+    const taken = next ? await store.findUserByUsername(next) : null;
+    if (taken && taken.id !== u.id) return bad(res, 409, 'Username already taken');
+    patch.username = next;
   }
   if (!Object.keys(patch).length) return bad(res, 400, 'Nothing to update');
   return ok(res, { user: publicUser(await store.updateUser(u.id, patch)) });
@@ -359,6 +390,7 @@ app.use((err, req, res, next) => {
   // are already mapped to their responses above.
   if (res.statusCode === 500) console.error('ERR', err.message);
   if (err.message === 'CORS origin not allowed') return bad(res, 403, 'Origin not allowed');
+  if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) return bad(res, 400, 'Invalid JSON body');
   if (err.code === '23505') return bad(res, 409, 'Already exists');
   if (err.code === '23503') return bad(res, 400, 'Related record not found');
   if (err.code === '22P02') return bad(res, 400, 'Invalid id');
