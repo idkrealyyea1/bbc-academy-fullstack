@@ -72,7 +72,7 @@
 
   // --- Overview helper: summary cards shown at the top of every dashboard ---
   function overview(titleEn, titleAr, value, noteEn, noteAr) {
-    return '<div class="card" style="margin-bottom:1rem"><h3>' + h(t(titleEn, titleAr)) + '</h3>' + '<p class="price">' + h(value) + '</p>' + '<p class="muted">' + h(noteEn || noteAr || '') + '</p></div>';
+    return '<div class="card" style="margin-bottom:1rem"><h3>' + h(t(titleEn, titleAr)) + '</h3>' + '<p class="price">' + h(value) + '</p>' + '<p class="muted">' + h(t(noteEn || '', noteAr || '')) + '</p></div>';
   }
 
   // --- Helper: section wrapper with eyebrown heading ---
@@ -114,10 +114,10 @@
     var present = att.filter(function (a) { return a.status === 'present'; }).length;
     var graded = asg.filter(function (a) { return a.submission && a.submission.grade != null; }).length;
     var openAsg = asg.filter(function (a) { return !a.submission; });
-    content.innerHTML = section(t('Overview', 'نظرة عامة'), heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.')))
-      + overview(t('My courses', 'دوراتي'), enr.length, t('enrolments', 'تسجيل'))
-      + overview(t('My level', 'مستواي'), latest ? latest.recommended_level : '—', latest ? t('placement result', 'نتيجة اختبار المستوى') : t('not taken yet', 'لم تُجرَ بعد'))
-      + overview(t('Attendance', 'الحضور'), present + ' / ' + att.length, t('lessons attended', 'حصة حضرتها'))
+    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.')))
+      + overview('My courses', 'دوراتي', enr.length, 'enrolments', 'تسجيل')
+      + overview('My level', 'مستواي', latest ? latest.recommended_level : '—', latest ? 'placement result' : 'not taken yet', latest ? 'نتيجة اختبار المستوى' : 'لم تُجرَ بعد')
+      + overview('Attendance', 'الحضور', present + ' / ' + att.length, 'lessons attended', 'حصة حضرتها')
       + '</div><div class="grid grid2" style="margin-top:1rem">'
       + '<div class="card"><h3>' + h(t('My enrolments', 'تسجيلاتي')) + '</h3>'
       + table([t('Course', 'الدورة'), t('Status', 'الحالة')], enr.map(function (e) {
@@ -178,10 +178,10 @@
         return '<option value="' + h(e.student_id) + '">' + h(e.student_name || e.student_id) + '</option>';
       }).join('');
     };
-    content.innerHTML = section(t('Overview', 'نظرة عامة'), heading(me, t('Your classes, students and tasks for today.', 'حصصك وطلابك ومهام اليوم.')))
-      + overview(t('My courses', 'دوراتي'), courses.length, '')
-      + overview(t('Students', 'الطلاب'), Object.keys(students).length, t('across your courses', 'في دوراتك'))
-      + overview(t('To grade', 'بانتظار التصحيح'), ungraded, t('submissions', 'تسليم')) + '</div>'
+    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Your classes, students and tasks for today.', 'حصصك وطلابك ومهام اليوم.')))
+      + overview('My courses', 'دوراتي', courses.length, '', '')
+      + overview('Students', 'الطلاب', Object.keys(students).length, 'across your courses', 'في دوراتك')
+      + overview('To grade', 'بانتظار التصحيح', ungraded, 'submissions', 'تسليم') + '</div>'
       + '<div class="card" style="margin-top:1rem"><h3>' + h(t('My classes', 'حصصي')) + '</h3>'
       + table([t('Class', 'الحصة'), t('Students', 'الطلاب')], courses.map(function (c) {
         return '<tr><td>' + h(c.title_en) + '</td><td>' + enr.filter(function (e) { return e.course_id === c.id; }).length + '</td></tr>';
@@ -286,10 +286,10 @@
     var students = users.filter(function (u) { return u.role === 'student'; });
     var pending = bookings.filter(function (b) { return b.status === 'pending'; });
     var courseOpts = courses.map(function (c) { return '<option value="' + h(c.id) + '" data-en="' + h(c.title_en) + '">' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</option>'; }).join('');
-    content.innerHTML = section(t('Overview', 'نظرة عامة'), heading(me, t('Students, courses and bookings at a glance.', 'الطلاب والدورات والحجوزات في لمحة.')))
-      + overview(t('Students', 'الطلاب'), students.length, '')
-      + overview(t('Courses', 'الدورات'), courses.length, '')
-      + overview(t('Pending bookings', 'حجوزات معلّقة'), pending.length, '') + '</div>'
+    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Students, courses and bookings at a glance.', 'الطلاب والدورات والحجوزات في لمحة.')))
+      + overview('Students', 'الطلاب', students.length, '', '')
+      + overview('Courses', 'الدورات', courses.length, '', '')
+      + overview('Pending bookings', 'حجوزات معلّقة', pending.length, '', '') + '</div>'
       + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Booking requests', 'طلبات الحجز')) + '</h3>'
       + table([t('Name', 'الاسم'), t('Contact', 'التواصل'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], bookings.map(function (b) {
         var actions = b.status === 'pending'
