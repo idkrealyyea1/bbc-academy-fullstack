@@ -102,6 +102,23 @@ app.post('/api/lessons', auth, roles('admin', 'teacher'), async (req, res) => {
   return ok(res, { lesson: await store.createLesson({ course_id: b.course_id, title_en: b.title_en.trim(), title_ar: b.title_ar || null, content_url: b.content_url || null, material_url: b.material_url || null, live_class_url: b.live_class_url || null, order_no: b.order_no || 1 }) }, 201);
 });
 
+// --- Booking requests (anonymous: students apply BEFORE having an account) ---
+app.use('/api/booking-requests', rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true }));
+app.post('/api/booking-requests', async (req, res) => {
+  try {
+    if (!reqStr(req.body, 'full_name', 200)) return bad(res, 400, 'full_name required');
+    const b = req.body || {};
+    const r = await store.createBookingRequest({ full_name: b.full_name.trim(), phone: typeof b.phone === 'string' ? b.phone.slice(0, 50) : null, course: typeof b.course === 'string' ? b.course.slice(0, 200) : null, source: typeof b.source === 'string' ? b.source.slice(0, 50) : null, message: typeof b.message === 'string' ? b.message.slice(0, 2000) : null });
+    return ok(res, { booking_request: r }, 201);
+  } catch (e) { console.error(e); return bad(res, 500, 'Booking request failed'); }
+});
+app.get('/api/admin/booking-requests', auth, roles('admin'), async (req, res) => ok(res, { booking_requests: await store.listBookingRequests() }));
+app.put('/api/admin/booking-requests/:id', auth, roles('admin'), async (req, res) => {
+  if (!['pending', 'confirmed', 'rejected'].includes(req.body?.status)) return bad(res, 400, 'status must be pending, confirmed or rejected');
+  const r = await store.updateBookingRequest(req.params.id, req.body.status);
+  return r ? ok(res, { booking_request: r }) : bad(res, 404, 'Booking request not found');
+});
+
 // --- Enrolments ---
 app.post('/api/enrolments', auth, roles('student', 'admin'), async (req, res) => {
   if (!reqStr(req.body, 'course_id')) return bad(res, 400, 'course_id required');

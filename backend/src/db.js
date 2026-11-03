@@ -29,7 +29,7 @@ class MemoryStore {
   constructor() {
     this.users = []; this.courses = []; this.levels = [...DEMO_LEVELS.map((l, i) => ({ id: `level-${l.code}`, ...l }))];
     this.lessons = []; this.enrolments = []; this.placements = []; this.assignments = [];
-    this.submissions = []; this.attendance = []; this.announcements = []; this.payments = [];
+    this.submissions = []; this.attendance = []; this.announcements = []; this.payments = []; this.bookingRequests = [];
     this.courses = DEMO_COURSES.map((c, i) => ({ id: `course-${c.slug}`, teacher_id: null, ...c, created_at: now() }));
   }
   async findUserByEmail(e) { return this.users.find(u => u.email === e.toLowerCase()) || null; }
@@ -62,6 +62,9 @@ class MemoryStore {
   async createPayment(p) { const r = { id: uid(), status: 'pending', created_at: now(), ...p }; this.payments.push(r); return r; }
   async listPaymentsForUser(uid_) { return this.payments.filter(p => p.student_id === uid_); }
   async listPaymentsAll() { return this.payments; }
+  async createBookingRequest(b) { const r = { id: uid(), status: 'pending', created_at: now(), ...b }; this.bookingRequests.push(r); return r; }
+  async listBookingRequests() { return [...this.bookingRequests].reverse(); }
+  async updateBookingRequest(id, status) { const r = this.bookingRequests.find(x => x.id === id); if (!r) return null; r.status = status; return r; }
 }
 
 class PgStore {
@@ -97,6 +100,9 @@ class PgStore {
   async createPayment(p) { return (await this.q('INSERT INTO payments (student_id,course_id,amount,currency,status,provider,provider_ref) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [p.student_id, p.course_id || null, p.amount || null, p.currency || 'ILS', p.status || 'pending', 'placeholder', p.provider_ref || null]))[0]; }
   async listPaymentsForUser(u) { return this.q('SELECT * FROM payments WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
   async listPaymentsAll() { return this.q('SELECT * FROM payments ORDER BY created_at DESC'); }
+  async createBookingRequest(b) { return (await this.q('INSERT INTO booking_requests (full_name,phone,course,source,message) VALUES ($1,$2,$3,$4,$5) RETURNING *', [b.full_name, b.phone || null, b.course || null, b.source || null, b.message || null]))[0]; }
+  async listBookingRequests() { return this.q('SELECT * FROM booking_requests ORDER BY created_at DESC'); }
+  async updateBookingRequest(id, status) { return (await this.q('UPDATE booking_requests SET status=$2 WHERE id=$1 RETURNING *', [id, status]))[0] || null; }
 }
 
 function createStore() {

@@ -85,7 +85,7 @@ function renderCourses(filter,lang){
   grid.innerHTML=groups.map(key=>{
     const first=byKey[key][0];
     const title=sectionName(first,lang);
-    const cards=byKey[key].map(c=>`<article class="card"><span class="tag">${lang==='ar'?(lvlAr[c.level]||c.level):c.level}</span>${c.custom?`<span class="tag">${lang==='ar'?'تجريبية':'Demo'}</span>`:''}<h3>${lang==='ar'?c.ar:c.en}</h3><p class="muted">${lang==='ar'?c.desc_ar:c.desc_en}</p><p><strong>${c.weeks}</strong> ${lang==='ar'?'أسابيع':'weeks'} · <strong>${c.lessons}</strong> ${lang==='ar'?'درس':'lessons'}</p><p><a class="btn small" href="course.html?id=${c.id}">${lang==='ar'?'التفاصيل والتسجيل':'Details & enrol'}</a>${c.custom?` <button class="btn small outline" data-remove="${c.id}">${lang==='ar'?'إزالة':'Remove'}</button>`:''}</p></article>`).join('');
+    const cards=byKey[key].map(c=>`<article class="card"><span class="tag">${lang==='ar'?(lvlAr[c.level]||c.level):c.level}</span>${c.custom?`<span class="tag">${lang==='ar'?'تجريبية':'Demo'}</span>`:''}<h3>${lang==='ar'?c.ar:c.en}</h3><p class="muted">${lang==='ar'?c.desc_ar:c.desc_en}</p><p><strong>${c.weeks}</strong> ${lang==='ar'?'أسابيع':'weeks'}${c.lessons ? ` · <strong>${c.lessons}</strong> ${lang==='ar'?'درس':'lessons'}` : ''}</p><p><a class="btn small" href="course.html?id=${c.id}">${lang==='ar'?'التفاصيل والتسجيل':'Details & enrol'}</a>${c.custom?` <button class="btn small outline" data-remove="${c.id}">${lang==='ar'?'إزالة':'Remove'}</button>`:''}</p></article>`).join('');
     return `<h2 class="course-section-title">${title}</h2><div class="grid grid3">${cards}</div>`;
   }).join('');
   grid.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',()=>{

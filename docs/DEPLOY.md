@@ -14,6 +14,7 @@ repo is published yet.
    - `db/migrations/001_init.sql`
    - `db/migrations/002_rls.sql`
    - `db/migrations/003_storage.sql` (optional but recommended)
+   - `db/migrations/004_booking_requests.sql`
    - `db/supabase/seed.sql` — demo data only. Skip on a production project
      until the owner confirms the demo catalogue is wanted.
 4. **Auth users:** create real users one of these ways (do NOT use the

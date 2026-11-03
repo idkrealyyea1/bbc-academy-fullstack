@@ -87,6 +87,16 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 | GET | `/api/payments/me` | Any role | — | `{ payments: [...] }` |
 | GET | `/api/payments` | admin | — | `{ payments: [...] }` |
 
+## Booking requests (anonymous — students apply BEFORE having an account)
+
+| Method | Endpoint | Auth | Body | Response |
+|---|---|---|---|---|
+| POST | `/api/booking-requests` | Public | `{ full_name, phone?, course?, source?, message? }` | 201 `{ booking_request }` (status `pending`) |
+| GET | `/api/admin/booking-requests` | admin | — | `{ booking_requests: [...] }` |
+| PUT | `/api/admin/booking-requests/:id` | admin | `{ status: "pending" \| "confirmed" \| "rejected" }` | `{ booking_request }` |
+
+The admin confirms a request, then creates the student account — students never self-register.
+
 ## Admin
 
 | Method | Endpoint | Auth | Body | Response |
