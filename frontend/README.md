@@ -37,18 +37,21 @@ the `API_BASE_URL` environment variable to the Render API URL.
 
 ## Pages
 
-index, courses, course (detail via `?id=<slug>`), levels (20-question scored
-placement quiz), about, teachers, pricing, booking, blog, faq, contact,
-login, signup, dashboard-student, dashboard-teacher, dashboard-admin.
+index, courses (grouped by section, with add-a-course form), course (detail via `?id=<slug>`),
+levels (placement quiz), about, teachers, booking, blog, faq, contact,
+login, dashboard-student, dashboard-teacher, dashboard-admin.
+
+No pricing page and no public signup page: students apply via booking and the admin creates
+their account after confirmation; dashboards are reached only via login.
 Language toggle (top right) switches EN/AR and RTL/LTR and persists in
 `localStorage` (`bbc-lang`). Auth token in `localStorage` (`bbc-token`).
 
 ## Design — shared with the frontend-only demo (2026-11-02 redesign)
 
-This frontend uses the exact same `styles.css`, header, hero and footer as
-`bbc-academy-frontend`: near-black `#0A0A0A`, BBC red `#D60000` / `#FF2D2D`,
-Inter + Playfair Display + Tajawal, hamburger navigation at ≤1024px, and
-the reference hero (faint letters, red pill, serif headline, 2×2 stats).
+This frontend is the new design, identical to the frontend-only demo: cream/navy/red system
+(`new-home.css` on the main page, `unified.css` + main-page header/footer on the other pages),
+BBC B-B-C mark, luxury black/red login page, page transition between pages, and the desktop
+English hero fix.
 Client-facing pages carry no visible TODO / demo text; the full honesty
 list (unverified hero stats, teachers by specialism only, "Fees on
 enquiry", no address/phone invented, BBC-affiliation disclaimer, classroom

@@ -1,154 +1,129 @@
-// Shared frontend logic: i18n (EN/AR, RTL/LTR), API client, demo-mode fallback.
-// Demo mode: when window.BBC_API_BASE is empty OR the API is unreachable,
-// pages render the same catalogue from fallback data (documented in README).
-// Nothing in demo mode is a real booking, account, payment or academy fact.
-const LANG_KEY = 'bbc-lang';
-const TOKEN_KEY = 'bbc-token', USER_KEY = 'bbc-user';
-const getLang = () => localStorage.getItem(LANG_KEY) || 'en';
-const API_BASE = () => (window.BBC_API_BASE || '').replace(/\/$/, '');
-let demoMode = !API_BASE();
-function t(en, ar) { return getLang() === 'ar' ? (ar || en) : en; }
-function applyLang(lang) {
-  localStorage.setItem(LANG_KEY, lang);
-  document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+const LANG_KEY='bbc-lang';
+function getLang(){return localStorage.getItem(LANG_KEY)||'en'}
+function applyLang(lang){
+  localStorage.setItem(LANG_KEY,lang);
+  document.documentElement.lang=lang; document.documentElement.dir=(lang==='ar'?'rtl':'ltr');
   // HARDENING: never rewrite an element that contains form controls or child
-  // elements — textContent replacement on such an element DESTROYS its
-  // children (this once deleted every <input> inside form labels).
-  document.querySelectorAll('[data-en]').forEach(el => {
+  // elements. textContent replacement on such an element DESTROYS its children
+  // (this once deleted every <input> inside form labels). Translatable text
+  // must live in its own leaf <span data-en data-ar>; controls are siblings.
+  document.querySelectorAll('[data-en]').forEach(el=>{
     if (el.querySelector('input,select,textarea')) return;
     if (el.children.length) return;
-    el.textContent = lang === 'ar' ? (el.dataset.ar || el.dataset.en) : el.dataset.en;
+    el.textContent = lang==='ar' ? (el.dataset.ar||el.dataset.en) : el.dataset.en;
   });
+  // Placeholders: <input data-ph-en="..." data-ph-ar="...">
   if (typeof window.__onLangChange==='function') window.__onLangChange(lang);
   document.querySelectorAll('[data-alt-en]').forEach(el=>{
     el.alt = lang==='ar' ? (el.dataset.altAr||el.dataset.altEn) : el.dataset.altEn;
   });
-  document.querySelectorAll('[data-ph-en]').forEach(el => {
-    el.placeholder = lang === 'ar' ? (el.dataset.phAr || el.dataset.phEn) : el.dataset.phEn;
+  document.querySelectorAll('[data-ph-en]').forEach(el=>{
+    el.placeholder = lang==='ar' ? (el.dataset.phAr||el.dataset.phEn) : el.dataset.phEn;
   });
-  const b = document.getElementById('langBtn'); if (b) b.textContent = lang === 'ar' ? 'English' : 'العربية';
-  document.querySelectorAll('[data-en-html]').forEach(el => { el.innerHTML = lang === 'ar' ? (el.dataset.arHtml || el.dataset.enHtml) : el.dataset.enHtml; });
+  const b=document.getElementById('langBtn'); if(b) b.textContent = lang==='ar' ? 'English' : 'العربية';
+  if(typeof renderCourses==='function' && document.getElementById('courseGrid')) renderCourses(window.__filter||'all',lang);
+  if(typeof renderCourseDetail==='function' && document.getElementById('courseDetail')) renderCourseDetail(lang);
 }
-function showDemoBanner() {
-  // Client presentation: no on-page demo banner. Fallback data is still
-  // documented in README.md and in code comments only.
-  return;
-}
-async function api(path, opts = {}) {
-  if (!API_BASE()) { demoMode = true; throw new Error('no-api'); }
-  const token = localStorage.getItem(TOKEN_KEY);
-  const res = await fetch(API_BASE() + path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-  return data;
-}
-async function apiOrDemo(path, demoValue) {
-  try { const d = await api(path); demoMode = false; return d; }
-  catch (e) { demoMode = true; showDemoBanner(); return demoValue; }
-}
-function getUser() { try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch { return null; } }
-function setSession(user, token) { localStorage.setItem(USER_KEY, JSON.stringify(user)); if (token) localStorage.setItem(TOKEN_KEY, token); }
-function logout() { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); location.href = 'index.html'; }
-function requireRole(...roles) {
-  const u = getUser();
-  if (!u) { location.href = 'login.html'; return null; }
-  if (roles.length && !roles.includes(u.role)) { document.body.innerHTML = '<main class="wrap"><p class="alert">' + t('This dashboard is not for your role.', 'لوحة التحكم هذه ليست لدورك.') + '</p></main>'; return null; }
-  return u;
-}
-// Demo catalogue (mirrors backend seed; prices intentionally absent/TODO).
-const DEMO_COURSES = [
-  { id: 'course-general-a1', slug: 'general-a1', level_code: 'A1', title_en: 'General English A1', title_ar: 'الإنجليزية العامة A1', description_en: 'Speak, listen, read and write with confidence from the first lesson.', description_ar: 'تحدث واستمع واقرأ واكتب بثقة من الدرس الأول.', duration_weeks: 8, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-general-a2', slug: 'general-a2', level_code: 'A2', title_en: 'General English A2', title_ar: 'الإنجليزية العامة A2', description_en: 'Everyday vocabulary, grammar and conversation for daily life.', description_ar: 'مفردات وقواعد ومحادثة يومية للحياة اليومية.', duration_weeks: 8, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-general-b1', slug: 'general-b1', level_code: 'B1', title_en: 'General English B1', title_ar: 'الإنجليزية العامة B1', description_en: 'Discuss opinions, tell stories and handle travel and work situations.', description_ar: 'ناقش الآراء واحكِ القصص وتعامل مع مواقف السفر والعمل.', duration_weeks: 10, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-general-b2', slug: 'general-b2', level_code: 'B2', title_en: 'General English B2', title_ar: 'الإنجليزية العامة B2', description_en: 'Debate, present and write clearly for study and professional use.', description_ar: 'ناقش وقدّم واكتب بوضوح للدراسة والاستخدام المهني.', duration_weeks: 10, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-ielts-prep', slug: 'ielts-prep', level_code: 'B2', title_en: 'IELTS Preparation', title_ar: 'التحضير لاختبار IELTS', description_en: 'Exam strategies, timed practice and feedback on all four skills.', description_ar: 'استراتيجيات الامتحان وتدريب موقوت وملاحظات على المهارات الأربع.', duration_weeks: 6, price_amount: null, price_currency: 'ILS' },
-  { id: 'course-conversation-club', slug: 'conversation-club', level_code: 'A2', title_en: 'Conversation Club', title_ar: 'نادي المحادثة', description_en: 'Weekly speaking practice on real-life topics, in small groups.', description_ar: 'تدريب أسبوعي على التحدث حول مواضيع واقعية في مجموعات صغيرة.', duration_weeks: 4, price_amount: null, price_currency: 'ILS' },
-];
-const DEMO_LEVELS = [
-  { code: 'A1', name_en: 'Beginner', name_ar: 'مبتدئ' }, { code: 'A2', name_en: 'Elementary', name_ar: 'ابتدائي' },
-  { code: 'B1', name_en: 'Intermediate', name_ar: 'متوسط' }, { code: 'B2', name_en: 'Upper Intermediate', name_ar: 'فوق المتوسط' },
-  { code: 'C1', name_en: 'Advanced', name_ar: 'متقدم' }, { code: 'C2', name_en: 'Proficiency', name_ar: 'إتقان' },
-];
-function courseTitle(c) { return getLang() === 'ar' ? (c.title_ar || c.title_en) : c.title_en; }
-function courseDesc(c) { return getLang() === 'ar' ? (c.description_ar || c.description_en || '') : (c.description_en || ''); }
-function priceText(c) { return c.price_amount == null ? t('Fees on enquiry', 'الرسوم عند الاستفسار') : (c.price_amount + ' ' + (c.price_currency || 'ILS')); }
-function courseCard(c) {
-  return `<article class="card"><span class="tag">${c.level_code || ''}</span><h3>${courseTitle(c)}</h3><p class="muted">${courseDesc(c)}</p><p>${c.duration_weeks ? `<strong>${c.duration_weeks}</strong> ${t('weeks', 'أسابيع')} · ` : ''}${priceText(c)}</p><p><a class="btn small" href="course.html?id=${encodeURIComponent(c.slug || c.id)}">${t('Details & enrol', 'التفاصيل والتسجيل')}</a></p></article>`;
-}
-async function loadCourses(gridId, filter) {
-  const grid = document.getElementById(gridId); if (!grid) return;
-  const data = await apiOrDemo('/api/courses', { courses: DEMO_COURSES });
-  const list = (data.courses || []).filter(c => !filter || filter === 'all' || (c.level_code || '') === filter);
-  grid.innerHTML = list.map(courseCard).join('') || `<p class="muted">${t('No courses found.', 'لا توجد دورات.')}</p>`;
-}
-document.addEventListener('DOMContentLoaded', () => {
-  const b = document.getElementById('langBtn');
-  if (b) b.addEventListener('click', () => { applyLang(getLang() === 'ar' ? 'en' : 'ar'); location.reload(); });
+document.addEventListener('DOMContentLoaded',()=>{
+  const b=document.getElementById('langBtn'); if(b) b.addEventListener('click',()=>applyLang(getLang()==='ar'?'en':'ar'));
   applyLang(getLang());
-  if (demoMode) showDemoBanner();
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) logoutBtn.addEventListener('click', logout);
-  const authArea = document.getElementById('authArea');
-  const u = getUser();
-  if (authArea) {
-    authArea.innerHTML = u
-      ? `<span class="muted">${u.full_name} (${u.role})</span> <a class="btn small" href="dashboard-${u.role === 'admin' ? 'admin' : u.role === 'teacher' ? 'teacher' : 'student'}.html">${t('Dashboard', 'لوحة التحكم')}</a> <button class="btn small outline" id="logoutBtn2">${t('Logout', 'تسجيل الخروج')}</button>`
-      : `<a class="btn small" href="login.html">${t('Login', 'تسجيل الدخول')}</a>`;
-    const l2 = document.getElementById('logoutBtn2'); if (l2) l2.addEventListener('click', logout);
-  }
+  // filters
+  document.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{
+    window.__filter=btn.dataset.filter;
+    document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('teal'));
+    btn.classList.add('teal'); renderCourses(window.__filter,getLang());
+  }));
+  // generic mock forms
+  document.querySelectorAll('form[data-mock]').forEach(f=>f.addEventListener('submit',e=>{
+    e.preventDefault(); const out=document.getElementById(f.dataset.mock); if(out){ out.hidden=false; out.scrollIntoView({behavior:'smooth'}); }
+  }));
 });
-
-// Placement quiz: 20 scored questions (grammar/vocabulary/reading).
-// The frontend scores for instant feedback; when logged in AND an API is
-// configured, the answers are also POSTed so the backend scores and stores
-// the official result. Demo-mode results are NOT official placements.
-const QUIZ = [
-  { q: ['Choose the correct sentence.', 'اختر الجملة الصحيحة.'], o: ['I am go to school.', 'I go to school.', 'I going school.'] },
-  { q: ['She ___ a teacher.', 'هي ___ معلمة.'], o: ['is', 'are', 'am'] },
-  { q: ['Past of "go" is ___.', 'الماضي من "go" هو ___.'], o: ['goed', 'went', 'gone to'] },
-  { q: ['"I have lived here ___ 2020."', '"I have lived here ___ 2020."'], o: ['for', 'since', 'from'] },
-  { q: ['Which is most formal?', 'أيها الأكثر رسمية؟'], o: ['Wanna come?', 'Could you please join us?', 'Come now!'] },
-  { q: ['"Despite the rain, ___."', '"Despite the rain, ___."'], o: ['we went out', 'we go yesterday', 'we are go'] },
-  { q: ['If I ___ more time, I would study French.', 'لو ___ وقت أكثر، لدرست الفرنسية.'], o: ['have', 'had', 'has'] },
-  { q: ['He has worked here ___ three years.', 'هو يعمل هنا ___ ثلاث سنوات.'], o: ['since', 'for', 'during'] },
-  { q: ['"Can you ___ me with this bag?"', '"Can you ___ me with this bag?"'], o: ['help', 'helps', 'helping'] },
-  { q: ['The opposite of "generous" is ___.', 'عكس "generous" هو ___.'], o: ['kind', 'selfish', 'selfishly'] },
-  { q: ['She ___ to London twice.', 'هي ___ إلى لندن مرتين.'], o: ['has been', 'have been', 'is been'] },
-  { q: ['"I wish I ___ speak English fluently."', '"I wish I ___ speak English fluently."'], o: ['could', 'can', 'will'] },
-  { q: ['The book ___ on the table yesterday.', 'الكتاب ___ على الطاولة أمس.'], o: ['was', 'were', 'is'] },
-  { q: ['"Neither Ali ___ Sara came to class."', '"Neither Ali ___ Sara came to class."'], o: ['or', 'and', 'nor'] },
-  { q: ['Choose the correctly spelled word.', 'اختر الكلمة المكتوبة بشكل صحيح.'], o: ['accomodate', 'accommodate', 'acommodate'] },
-  { q: ['"By this time tomorrow, we ___ our exams."', '"By this time tomorrow, we ___ our exams."'], o: ['will finish', 'will have finished', 'finish'] },
-  { q: ['A word that means "to make something easier to understand".', 'كلمة تعني "جعل شيء أسهل للفهم".'], o: ['complicate', 'clarify', 'ignore'] },
-  { q: ['"Hardly ___ arrived when it started to rain."', '"Hardly ___ arrived when it started to rain."'], o: ['had we', 'we had', 'did we'] },
-  { q: ['Which sentence is correct?', 'أي جملة صحيحة؟'], o: ['She don\'t like tea.', 'She doesn\'t like tea.', 'She isn\'t like tea.'] },
-  { q: ['"The proposal was ___ by the committee." (formal)', '"The proposal was ___ by the committee." (formal)'], o: ['turned down', 'rejected', 'refused off'] },
+// Courses mock data (DEMO names, NOT real academy staff/prices)
+const COURSES=[
+ {id:'general-a1',level:'Beginner',en:'General English A1',ar:'الإنجليزية العامة A1',desc_en:'Speak, listen, read and write with confidence from the very first lesson.',desc_ar:'تحدث واستمع واقرأ واكتب بثقة من الدرس الأول.',weeks:8,lessons:24},
+ {id:'general-a2',level:'Elementary',en:'General English A2',ar:'الإنجليزية العامة A2',desc_en:'Build everyday vocabulary, grammar and conversation for daily life.',desc_ar:'بناء مفردات وقواعد ومحادثة يومية للحياة اليومية.',weeks:8,lessons:24},
+ {id:'general-b1',level:'Intermediate',en:'General English B1',ar:'الإنجليزية العامة B1',desc_en:'Discuss opinions, tell stories and handle travel and work situations.',desc_ar:'ناقش الآراء واحكِ القصص وتعامل مع مواقف السفر والعمل.',weeks:10,lessons:30},
+ {id:'general-b2',level:'Intermediate',en:'General English B2',ar:'الإنجليزية العامة B2',desc_en:'Debate, present and write clearly for study and professional use.',desc_ar:'ناقش وقدّم واكتب بوضوح للدراسة والاستخدام المهني.',weeks:10,lessons:30},
+ {id:'ielts',level:'Advanced',en:'IELTS Preparation',ar:'التحضير لاختبار IELTS',desc_en:'Exam strategies, timed practice and feedback on all four skills.',desc_ar:'استراتيجيات الامتحان وتدريب موقوت وملاحظات على المهارات الأربع.',weeks:6,lessons:18},
+ {id:'kids',level:'Beginner',en:'English for Young Learners',ar:'الإنجليزية للصغار',desc_en:'Playful, speaking-first classes for children and teenagers.',desc_ar:'حصص ممتعة تركّز على التحدث للأطفال والمراهقين.',weeks:8,lessons:24},
+ {id:'business',level:'Advanced',en:'Business English',ar:'إنجليزية الأعمال',desc_en:'Meetings, emails, presentations and interviews in professional English.',desc_ar:'اجتماعات ورسائل وعروض ومقابلات بالإنجليزية المهنية.',weeks:8,lessons:24},
+ {id:'conversation',level:'Elementary',en:'Conversation Club',ar:'نادي المحادثة',desc_en:'Weekly speaking practice on real-life topics, in small groups.',desc_ar:'تدريب أسبوعي على التحدث حول مواضيع واقعية في مجموعات صغيرة.',weeks:4,lessons:8},
 ];
-const QUIZ_ANSWERS = [1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 2, 1, 1, 1, 0, 1, 1];
-function quizLevel(score, total) {
-  const r = score / total;
-  if (r < 0.25) return 'A1'; if (r < 0.45) return 'A2'; if (r < 0.65) return 'B1';
-  if (r < 0.85) return 'B2'; if (r < 0.95) return 'C1'; return 'C2';
+// Course sections: a course always lives in a section. Built-in sections have
+// EN/AR names; a custom section keeps the name its creator typed.
+const SECTIONS={
+ general:{en:'General English',ar:'الإنجليزية العامة'},
+ ielts:{en:'IELTS Preparation',ar:'التحضير لاختبار IELTS'},
+ business:{en:'Business English',ar:'إنجليزية الأعمال'},
+ conversation:{en:'Conversation Club',ar:'نادي المحادثة'},
+ kids:{en:'English for Young Learners',ar:'الإنجليزية للصغار'}
+};
+function sectionOf(c){ if(c.sectionName) return {en:c.sectionName,ar:c.sectionName}; const sec=SECTIONS[c.section]; return sec ? sec : {en:c.section||'',ar:c.section||''}; }
+function sectionName(c,lang){ const sec=sectionOf(c); return lang==='ar'?sec.ar:sec.en; }
+COURSES.forEach(c=>{ if(!c.section){ if(c.id.indexOf('general')===0) c.section='general'; else if(c.id==='ielts') c.section='ielts'; else if(c.id==='business') c.section='business'; else if(c.id==='conversation') c.section='conversation'; else if(c.id==='kids') c.section='kids'; } });
+// Demo-added courses, saved in this browser only (static demo, no backend yet).
+try{ const saved=JSON.parse(localStorage.getItem('bbc-custom-courses')||'[]'); saved.forEach(c=>{ c.custom=true; COURSES.push(c); }); }catch(e){}
+function saveCustomCourses(){ try{ localStorage.setItem('bbc-custom-courses', JSON.stringify(COURSES.filter(c=>c.custom))); }catch(e){} }
+function populateSectionSelect(){
+  const sel=document.getElementById('courseSection'); if(!sel) return;
+  const lang=getLang(); const seen={}; let html='';
+  Object.keys(SECTIONS).forEach(k=>{ html+=`<option value="${k}" data-en="${SECTIONS[k].en}" data-ar="${SECTIONS[k].ar}">${lang==='ar'?SECTIONS[k].ar:SECTIONS[k].en}</option>`; });
+  COURSES.filter(c=>c.custom && c.sectionName && !seen[c.sectionName]).forEach(c=>{ seen[c.sectionName]=1; html+=`<option value="custom:${c.sectionName}" data-en="${c.sectionName}" data-ar="${c.sectionName}">${c.sectionName}</option>`; });
+  html+=`<option value="__new" data-en="Create a new section…" data-ar="إنشاء قسم جديد…">${lang==='ar'?'إنشاء قسم جديد…':'Create a new section…'}</option>`;
+  sel.innerHTML=html;
+  const wrap=document.getElementById('newSectionWrap'); if(wrap) wrap.hidden = sel.value!=='__new';
 }
-let quizIdx = 0, quizAnswers = [];
-function quizStart() { quizIdx = 0; quizAnswers = []; quizShow(); }
-function quizShow() {
-  const box = document.getElementById('quizBox'); if (!box) return;
-  const lang = getLang();
-  if (quizIdx >= QUIZ.length) {
-    let score = 0; quizAnswers.forEach((a, i) => { if (a === QUIZ_ANSWERS[i]) score++; });
-    const lvl = quizLevel(score, QUIZ.length);
-    box.innerHTML = `<div class="success"><h3>${lang === 'ar' ? 'نتيجتك' : 'Your result'}</h3><p>${score} / ${QUIZ.length} — <strong>${lvl}</strong> ${t('recommended level', 'المستوى الموصى به')}</p><p class="muted">${demoMode ? t('Use this result as a guide to choose your level.', 'استخدم هذه النتيجة كدليل لاختيار مستواك.') : t('Result saved to your account (if logged in). A teacher can still override it.', 'تم حفظ النتيجة في حسابك (إن كنت مسجلًا). ويمكن للمعلم تعديلها.')}</p><p><a class="btn" href="courses.html">${t('Browse courses', 'تصفح الدورات')}</a> <button class="btn outline" onclick="quizStart()">${t('Retake', 'إعادة الاختبار')}</button></p></div>`;
-    if (!demoMode && getUser()) api('/api/placement-tests', { method: 'POST', body: JSON.stringify({ answers: quizAnswers }) }).catch(() => {});
-    return;
+window.__onLangChange=function(){ populateSectionSelect(); };
+function renderCourses(filter,lang){
+  const grid=document.getElementById('courseGrid'); if(!grid) return;
+  const list=COURSES.filter(c=>filter==='all'||c.level===filter);
+  if(!list.length){ grid.innerHTML=`<p class="muted">${lang==='ar'?'لا توجد دورات في هذا المستوى.':'No courses in this level.'}</p>`; return; }
+  const lvlAr={Beginner:'مبتدئ',Elementary:'ابتدائي',Intermediate:'متوسط',Advanced:'متقدم'};
+  const groups=[]; const byKey={};
+  list.forEach(c=>{ const key=c.sectionName?('custom:'+c.sectionName):('built:'+(c.section||'')); if(!byKey[key]){ byKey[key]=[]; groups.push(key); } byKey[key].push(c); });
+  grid.innerHTML=groups.map(key=>{
+    const first=byKey[key][0];
+    const title=sectionName(first,lang);
+    const cards=byKey[key].map(c=>`<article class="card"><span class="tag">${lang==='ar'?(lvlAr[c.level]||c.level):c.level}</span>${c.custom?`<span class="tag">${lang==='ar'?'تجريبية':'Demo'}</span>`:''}<h3>${lang==='ar'?c.ar:c.en}</h3><p class="muted">${lang==='ar'?c.desc_ar:c.desc_en}</p><p><strong>${c.weeks}</strong> ${lang==='ar'?'أسابيع':'weeks'} · <strong>${c.lessons}</strong> ${lang==='ar'?'درس':'lessons'}</p><p><a class="btn small" href="course.html?id=${c.id}">${lang==='ar'?'التفاصيل والتسجيل':'Details & enrol'}</a>${c.custom?` <button class="btn small outline" data-remove="${c.id}">${lang==='ar'?'إزالة':'Remove'}</button>`:''}</p></article>`).join('');
+    return `<h2 class="course-section-title">${title}</h2><div class="grid grid3">${cards}</div>`;
+  }).join('');
+  grid.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',()=>{
+    if(!window.confirm(lang==='ar'?'إزالة هذه الدورة التجريبية؟':'Remove this demo course?')) return;
+    const idx=COURSES.findIndex(c=>c.id===btn.dataset.remove);
+    if(idx>=0) COURSES.splice(idx,1);
+    saveCustomCourses(); renderCourses(window.__filter||'all', getLang());
+  }));
+}
+function renderCourseDetail(lang){
+  const params=new URLSearchParams(location.search); const c=COURSES.find(x=>x.id===params.get('id'))||COURSES[0];
+  const el=document.getElementById('courseDetail'); if(!el) return;
+  const learn = lang==='ar' ? ['التحدث والاستماع','القراءة والكتابة','المفردات والقواعد','ممارسة واقعية'] : ['Speaking & listening','Reading & writing','Vocabulary & grammar','Real-life practice'];
+  const lvlAr = {Beginner:'مبتدئ',Elementary:'ابتدائي',Intermediate:'متوسط',Advanced:'متقدم'}[c.level]||c.level;
+  el.innerHTML=`<span class="tag">${lang==='ar'?lvlAr:c.level}</span><h1>${lang==='ar'?c.ar:c.en}</h1><p class="muted">${lang==='ar'?c.desc_ar:c.desc_en}</p><p class="muted">${lang==='ar'?'القسم: ':'Section: '}${sectionName(c,lang)}</p><p><strong>${c.weeks}</strong> ${lang==='ar'?'أسابيع':'weeks'} · <strong>${c.lessons}</strong> ${lang==='ar'?'درس':'lessons'} · ${lang==='ar'?'الرسوم عند الاستفسار':'Fees on enquiry'}</p><div class="grid grid2"><div class="card"><h3>${lang==='ar'?'ماذا ستتعلم؟':'What you will learn'}</h3><ul>${learn.map(x=>`<li>${x}</li>`).join('')}</ul></div><div class="card"><h3>${lang==='ar'?'تفاصيل الدورة':'Course details'}</h3><p>${lang==='ar'?'مجموعات صغيرة وحصص تركّز على التحدث. تُؤكَّد المواعيد والمجموعة عند الحجز.':'Small groups and speaking-first lessons. Your schedule and group are confirmed when you book.'}</p><p><a class="btn" href="booking.html">${lang==='ar'?'احجز مقعدك':'Book your seat'}</a></p></div></div>`;
+}
+// Placement quiz (mock, 6 questions)
+const QUIZ=[
+ {q_en:'Choose the correct sentence.',q_ar:'اختر الجملة الصحيحة.',o:['I am go to school.','I go to school.','I going school.'],a:1},
+ {q_en:'She ___ a teacher.',q_ar:'هي ___ معلمة.',o:['is','are','am'],a:0},
+ {q_en:'Past of “go” is ___.',q_ar:'الماضي من “go” هو ___.',o:['goed','went','gone to'],a:1},
+ {q_en:'“I have lived here ___ 2020.”',q_ar:'“I have lived here ___ 2020.”',o:['for','since','from'],a:1},
+ {q_en:'Which is most formal?',q_ar:'أيها الأكثر رسمية؟',o:['Wanna come?','Could you please join us?','Come now!'],a:1},
+ {q_en:'“Despite the rain, ___.”',q_ar:'“Despite the rain, ___.”',o:['we went out','we go yesterday','we are go'],a:0},
+];
+let quizIdx=0, quizScore=0;
+function quizStart(){ quizIdx=0; quizScore=0; quizShow(); }
+function quizShow(){
+  const box=document.getElementById('quizBox'); if(!box) return;
+  const lang=getLang();
+  if(quizIdx>=QUIZ.length){
+    const lvl=quizScore<=2?'Beginner (A1–A2)':quizScore<=4?'Intermediate (B1)':'Advanced (B2+)';
+    box.innerHTML=`<div class="success"><h3>${lang==='ar'?'نتيجتك':'Your result'}</h3><p>${quizScore} / ${QUIZ.length} — <strong>${lvl}</strong></p><p>${lang==='ar'?'استخدم هذه النتيجة كدليل لاختيار مستواك.':'Use this result as a guide to choose your level.'}</p><p><a class="btn" href="courses.html">${lang==='ar'?'تصفح الدورات':'Browse courses'}</a> <button class="btn outline" onclick="quizStart()">${lang==='ar'?'إعادة الاختبار':'Retake'}</button></p></div>`; return;
   }
-  const q = QUIZ[quizIdx];
-  box.innerHTML = `<p><strong>${lang === 'ar' ? 'السؤال' : 'Question'} ${quizIdx + 1} / ${QUIZ.length}</strong></p><div class="bar"><i style="width:${Math.round(quizIdx / QUIZ.length * 100)}%"></i></div><h3>${lang === 'ar' ? q.q[1] : q.q[0]}</h3>` + q.o.map((o, i) => `<button class="quiz-opt" onclick="quizAnswer(${i})">${o}</button>`).join('');
+  const q=QUIZ[quizIdx];
+  box.innerHTML=`<p><strong>${lang==='ar'?'السؤال':'Question'} ${quizIdx+1} / ${QUIZ.length}</strong></p><h3>${lang==='ar'?q.q_ar:q.q_en}</h3>`+q.o.map((o,i)=>`<button class="quiz-opt" onclick="quizAnswer(${i})">${o}</button>`).join('');
 }
-function quizAnswer(i) { quizAnswers.push(i); quizIdx++; quizShow(); }
+function quizAnswer(i){ if(i===QUIZ[quizIdx].a) quizScore++; quizIdx++; quizShow(); }
 
 // Hamburger navigation (mobile): toggle panel, close on link click.
 document.addEventListener('DOMContentLoaded', () => {
@@ -175,4 +150,36 @@ document.addEventListener('DOMContentLoaded', () => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
   }, { threshold: 0.12 });
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+});
+
+// Add a course: choose an existing section, or create a new one, and the
+// course goes into that section. Demo only: saved in this browser.
+document.addEventListener('DOMContentLoaded',()=>{
+  const form=document.getElementById('addCourseForm'); if(!form) return;
+  populateSectionSelect();
+  const sel=document.getElementById('courseSection');
+  sel.addEventListener('change',()=>{ const wrap=document.getElementById('newSectionWrap'); if(wrap) wrap.hidden = sel.value!=='__new'; });
+  form.addEventListener('submit',e=>{
+    e.preventDefault(); const lang=getLang();
+    const name=document.getElementById('courseName').value.trim();
+    const weeks=parseInt(document.getElementById('courseWeeks').value,10);
+    const lessons=parseInt(document.getElementById('courseLessons').value,10);
+    if(!name || !weeks || !lessons){ alert(lang==='ar'?'املأ اسم الدورة وعدد الأسابيع والدروس.':'Please fill in the course name, weeks and lessons.'); return; }
+    let sectionNameVal='', sectionKey='';
+    if(sel.value==='__new'){
+      sectionNameVal=document.getElementById('courseSectionNew').value.trim();
+      if(!sectionNameVal){ alert(lang==='ar'?'اكتب اسم القسم الجديد.':'Please type the new section name.'); return; }
+    } else if(sel.value.indexOf('custom:')===0){ sectionNameVal=sel.value.slice(7); }
+    else { sectionKey=sel.value; }
+    const course={ id:'custom-'+Date.now(), en:name, ar:name,
+      desc_en:document.getElementById('courseDesc').value.trim()||'A new course added in the demo.',
+      desc_ar:document.getElementById('courseDesc').value.trim()||'دورة جديدة أُضيفت في العرض التجريبي.',
+      level:document.getElementById('courseLevel').value, weeks:weeks, lessons:lessons, custom:true };
+    if(sectionNameVal) course.sectionName=sectionNameVal; else course.section=sectionKey;
+    COURSES.push(course); saveCustomCourses(); populateSectionSelect();
+    renderCourses(window.__filter||'all', lang);
+    const ok=document.getElementById('addCourseOk'); if(ok){ ok.hidden=false; ok.textContent = lang==='ar' ? ('تمت إضافة "'+name+'" إلى قسم '+sectionName(course,lang)+' ✔') : ('"'+name+'" was added to the '+sectionName(course,lang)+' section ✔'); }
+    form.reset(); populateSectionSelect();
+    document.getElementById('courseGrid').scrollIntoView({behavior:'smooth'});
+  });
 });

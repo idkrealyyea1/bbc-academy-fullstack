@@ -1,0 +1,179 @@
+/* ==========================================================================
+   BBC Academy — FULL unification with the NEW main page (unified.css)
+   Loaded AFTER styles.css and theme-new.css on every page EXCEPT index.html
+   (which already uses new-home.css). Content, copy, prices, forms, quiz and
+   dashboard data are untouched: this file + the new topbar/footer markup
+   make every page share the main page's design direction:
+     cream #f6f2e9 / paper #fffdf8 / navy #102a43 / navy-deep #0b2035
+     red #c94243 / peach #e4b498 / muted #64727b
+     Playfair Display serif (EN headings) / IBM Plex Sans Arabic (AR)
+     red 3px buttons, paper cards with thin navy borders
+   The header/footer markup on old pages is the main page's topbar/footer
+   structure, adapted only so app.js keeps working: nav id="mainNav",
+   hamburger id="menuBtn", language button id="langBtn".
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+:root{
+  --u-navy:#102a43; --u-navy-deep:#0b2035; --u-navy-soft:#183c59;
+  --u-red:#c94243; --u-red-deep:#a83238; --u-cream:#f6f2e9; --u-paper:#fffdf8;
+  --u-sand:#e8dfd0; --u-ink:#172d3d; --u-muted:#64727b; --u-line:rgba(16,42,67,.14);
+  --u-peach:#e4b498; --u-serif:'Playfair Display',Georgia,serif;
+  --u-sans:'DM Sans',sans-serif; --u-arabic:'IBM Plex Sans Arabic',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:92px;overflow-x:hidden}
+body{margin:0;background:var(--u-cream);color:var(--u-ink);font-family:var(--u-arabic),var(--u-sans);line-height:1.75;-webkit-font-smoothing:antialiased}
+html[dir="ltr"] body{font-family:var(--u-sans),var(--u-arabic)}
+button,input,select,textarea{font:inherit}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{width:min(1180px,calc(100% - 56px));margin-inline:auto;padding-inline:0}
+.skip-link{position:absolute;left:-9999px}
+.skip-link:focus{left:12px;top:12px;z-index:999;background:#fff;padding:8px 12px;border-radius:3px}
+
+/* ---------- Topbar: identical structure to the main page, sticky here ---------- */
+.topbar{position:sticky;top:0;z-index:1000;height:76px;background:var(--u-navy-deep);color:#fff;border-bottom:1px solid rgba(255,255,255,.14)}
+.nav-inner{height:100%;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:inline-flex;align-items:center;gap:12px;direction:ltr;flex:0 0 auto}
+.brand-mark{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
+.brand-mark b{background:#fff;color:var(--u-navy);font:700 12px/1 var(--u-sans);padding:6px 5px 5px;letter-spacing:-.05em}
+.brand-mark b:nth-child(2){background:var(--u-red);color:#fff}
+.brand-copy{display:flex;flex-direction:column;line-height:1}
+.brand-copy strong{font:700 13px var(--u-sans);letter-spacing:.08em}
+.brand-copy small{font:11px var(--u-sans);color:rgba(255,255,255,.65)}
+.nav-links{display:flex;align-items:center;gap:16px;font-size:12.5px;color:rgba(255,255,255,.82);white-space:nowrap}
+.nav-links a{transition:color .2s ease}
+.nav-links a:hover,.nav-links a.active{color:#fff}
+.nav-links a.active{border-bottom:2px solid var(--u-red);padding-bottom:2px}
+.nav-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.lang-toggle{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.34);padding:8px 11px;border-radius:3px;font-size:12px;cursor:pointer}
+.nav-cta{display:inline-flex;justify-content:center;align-items:center;gap:8px;background:var(--u-red);border:1px solid var(--u-red);color:#fff;padding:11px 16px;font-size:12.5px;font-weight:700;border-radius:3px;transition:background .2s ease,transform .2s ease;white-space:nowrap}
+.nav-cta:hover{background:var(--u-red-deep);transform:translateY(-2px)}
+.nav-cta-ghost{background:transparent;border-color:rgba(255,255,255,.48)}
+.nav-cta-ghost:hover{background:rgba(255,255,255,.1)}
+.menu-toggle{display:none;color:#fff;border:0;background:transparent;padding:8px;cursor:pointer}
+
+/* ---------- Page sections: main-page direction ---------- */
+main.wrap{padding-top:96px;padding-bottom:96px}
+main section{padding:0}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;color:var(--u-red);font-size:12px;font-weight:700;letter-spacing:.08em}
+.eyebrow::before{content:'';width:24px;height:1px;background:currentColor}
+main h1{margin:16px 0 14px;color:var(--u-navy);font-size:clamp(34px,4.2vw,54px);line-height:1.18;letter-spacing:-.035em}
+html[dir="ltr"] main h1{font-family:var(--u-serif);font-weight:600}
+html[dir="rtl"] main h1{font-family:var(--u-arabic);font-weight:700;letter-spacing:0}
+main h1 + p,main .section-intro{max-width:540px;color:var(--u-muted);line-height:1.9;font-size:16px}
+main h2,main h3{color:var(--u-navy)}
+html[dir="ltr"] main h2,html[dir="ltr"] main h3{font-family:var(--u-serif);font-weight:600}
+.card{background:var(--u-paper);border:1px solid var(--u-line);border-radius:3px;box-shadow:0 8px 20px rgba(22,39,52,.035)}
+.btn,.button{display:inline-flex;justify-content:center;align-items:center;gap:10px;background:var(--u-red);border:1px solid var(--u-red);color:#fff!important;padding:13px 20px;font-size:13px;font-weight:700;border-radius:3px;cursor:pointer;transition:background .2s ease,transform .2s ease}
+.btn:hover,.button:hover{background:var(--u-red-deep);transform:translateY(-2px)}
+.btn.outline,.button-outline{background:transparent;border-color:var(--u-navy);color:var(--u-navy)!important}
+.btn.outline:hover,.button-outline:hover{background:rgba(16,42,67,.06)}
+.btn.small{padding:10px 16px}
+input,select,textarea{background:var(--u-paper);border:1px solid var(--u-line);border-radius:3px;padding:12px 14px;width:100%;color:var(--u-ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--u-red);outline-offset:2px}
+table{width:100%;border-collapse:collapse;background:var(--u-paper)}
+th{color:var(--u-navy);text-align:start;border-bottom:2px solid var(--u-line);padding:12px}
+td{border-bottom:1px solid var(--u-line);padding:12px}
+.tag{display:inline-block;background:rgba(201,66,67,.1);color:var(--u-red);border:1px solid rgba(201,66,67,.3);border-radius:3px;padding:4px 10px;font-size:12px;font-weight:700}
+
+/* ---------- Footer: identical structure to the main page ---------- */
+.footer{background:#091b2c;color:#fff;padding:55px 0 24px;margin-top:0}
+.footer-main{display:grid;grid-template-columns:1.2fr 1fr 1.3fr 1fr;gap:40px;padding-bottom:42px}
+.footer-brand p{max-width:290px;color:rgba(255,255,255,.52);line-height:1.8;font-size:12px;margin:18px 0 0}
+.footer-col h4{margin:0 0 16px;font-size:12px;color:var(--u-peach)}
+.footer-links{display:grid;gap:12px;font-size:12px;color:rgba(255,255,255,.68)}
+.footer-links a:hover{color:#fff}
+.footer-bottom{border-top:1px solid rgba(255,255,255,.15);padding-top:19px;display:flex;justify-content:space-between;gap:20px;color:rgba(255,255,255,.42);font-size:10px}
+
+@media (max-width:1350px){
+  .brand-copy{display:none}
+  .nav-links{gap:12px;font-size:12px}
+  .nav-cta-ghost{display:none}
+}
+@media (max-width:900px){
+  .nav-links{gap:14px;font-size:12px}
+  .nav-cta-ghost{display:none}
+  .footer-main{grid-template-columns:1fr 1fr;gap:34px 20px}
+  .footer-brand{grid-column:1/-1}
+}
+@media (max-width:680px){
+  .wrap{width:min(100% - 36px,540px)}
+  main.wrap{padding-top:72px;padding-bottom:72px}
+  html{scroll-padding-top:72px}
+  .topbar{height:68px}
+  .nav-inner{gap:10px}
+  .menu-toggle{display:block;order:2}
+  .nav-actions{margin-inline-start:auto}
+  .lang-toggle{padding:7px 9px}
+  .nav-links{display:none;position:absolute;top:68px;inset-inline:0;padding:10px 22px 22px;background:var(--u-navy-deep);flex-direction:column;align-items:stretch;gap:0;box-shadow:0 14px 24px rgba(0,0,0,.18);white-space:normal}
+  .nav-links.open{display:flex}
+  .nav-links a{padding:14px 4px;border-bottom:1px solid rgba(255,255,255,.1);font-size:14px}
+  .nav-links a.active{border-bottom:1px solid rgba(255,255,255,.1)}
+  main h1{font-size:36px}
+  .footer-bottom{flex-direction:column;gap:8px}
+}
+
+/* Teacher profile cards on teachers.html: premium, like the main-page teacher cards. */
+.teacher-profile { overflow: hidden; padding: 0 0 22px; border-radius: 16px; box-shadow: 0 18px 40px rgba(16,42,67,.14); transition: transform .2s ease; }
+.teacher-profile:hover { transform: translateY(-3px); }
+.teacher-profile-photo { display: block; width: 100%; height: 300px; object-fit: cover; object-position: center 22%; }
+.teacher-profile .tag, .teacher-profile h3, .teacher-profile p { margin-inline: 22px; }
+.teacher-profile .tag { background: #c94243; color: #fff; border: 0; border-radius: 999px; padding: 6px 14px; margin-top: 20px; }
+.teacher-profile h3 { font-size: 28px; margin-top: 14px; margin-bottom: 6px; }
+.teacher-profile p { line-height: 1.8; }
+.teacher-profile .teacher-meta { color: #64727b; font-size: 13px; border-top: 1px solid rgba(16,42,67,.12); padding-top: 14px; margin-top: 16px; }
+.teacher-profile p:last-child { margin-bottom: 0; }
+.teacher-profile .btn { border-radius: 8px; padding: 13px 22px; }
+/* FAQ redesign: rounded, shadowed, red accent when open, CTA strip. */
+.faq-item { border-radius: 14px; box-shadow: 0 12px 28px rgba(16,42,67,.08); padding: 22px 24px; margin-bottom: 14px; position: relative; overflow: hidden; }
+.faq-item::before { content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 4px; background: #c94243; opacity: 0; }
+.faq-item[open]::before { opacity: 1; }
+.faq-item summary { font-size: 17px; line-height: 1.7; color: #102a43; }
+.faq-item p { color: #64727b; line-height: 1.9; margin: 14px 0 0; padding-top: 14px; border-top: 1px solid rgba(16,42,67,.12); }
+.faq-cta { margin-top: 28px; background: #102a43; color: #fff; border-radius: 16px; padding: 28px 24px; text-align: center; }
+.faq-cta p { color: rgba(255,255,255,.75); line-height: 1.8; }
+.faq-cta .btn { margin: 4px; }
+.faq-cta .btn.outline { border-color: rgba(255,255,255,.6); color: #fff !important; }
+.faq-cta .btn.outline:hover { background: rgba(255,255,255,.1); }
+.teacher-profile .tag { display: inline-block; margin-top: 16px; }
+.teacher-profile h3 { margin-top: 10px; }
+
+/* Pricing redesign: fuller, premium cards, featured plan stands out. */
+.pricing-grid { align-items: stretch; }
+.plan-card { display: flex; flex-direction: column; border-radius: 16px; box-shadow: 0 14px 34px rgba(16,42,67,.10); padding: 26px 24px; }
+.plan-card::before { content: ''; display: block; height: 4px; border-radius: 999px; background: #c94243; margin: -26px -24px 20px; }
+.plan-kicker { color: #c94243; font-size: 11px; letter-spacing: .08em; margin: 0 0 6px; }
+.plan-card h3 { font-size: 26px; margin: 0 0 8px; }
+.plan-desc { color: #64727b; line-height: 1.7; margin: 0 0 14px; }
+.plan-card .price { font-size: 18px; font-weight: 700; color: #102a43; background: #f6f2e9; border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; }
+.plan-features { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 10px; }
+.plan-features li { padding-inline-start: 26px; position: relative; line-height: 1.6; }
+.plan-features li::before { content: '✓'; position: absolute; inset-inline-start: 0; color: #c94243; font-weight: 700; }
+.plan-cta { width: 100%; margin-top: auto; text-align: center; }
+.plan-featured { background: #102a43; color: #fff; transform: scale(1.03); box-shadow: 0 22px 48px rgba(16,42,67,.28); }
+.plan-featured::before { background: #e4b498; margin: -26px -24px 20px; }
+.plan-featured h3, .plan-featured .plan-desc { color: #fff; }
+.plan-featured .plan-desc { color: rgba(255,255,255,.72); }
+.plan-featured .price { background: rgba(255,255,255,.10); color: #fff; }
+.plan-featured .tag { background: #c94243; color: #fff; }
+.pricing-note { margin-top: 34px; background: #fffdf8; border: 1px solid rgba(16,42,67,.14); border-radius: 16px; padding: 24px; text-align: center; }
+.pricing-note p { line-height: 1.8; color: #64727b; }
+@media (max-width: 680px) { .plan-featured { transform: none; } .plan-card { padding: 22px 20px; } }
+
+/* About story: long, image-led chapters, alternating on desktop. */
+.story-hero { width: 100%; height: 420px; object-fit: cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(16,42,67,.16); margin: 28px 0 12px; }
+.story-chapter { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; margin: 52px 0; }
+.story-chapter.flip .story-img { order: 2; }
+.story-img { width: 100%; height: 320px; object-fit: cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(16,42,67,.14); }
+.story-kicker { color: #c94243; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.story-chapter h3 { font-size: 28px; margin: 10px 0 10px; line-height: 1.35; }
+.story-chapter p { color: #64727b; line-height: 1.9; }
+@media (max-width: 680px) { .story-hero { height: 260px; } .story-chapter { grid-template-columns: 1fr; gap: 18px; margin: 38px 0; } .story-chapter.flip .story-img { order: 0; } .story-img { height: 240px; } }
+
+/* Courses by section + add-a-course form. */
+.course-section-title { font-size: 24px; margin: 38px 0 16px; padding-bottom: 10px; border-bottom: 2px solid #c94243; }
+.add-course { margin-top: 48px; background: var(--u-paper); border: 1px solid var(--u-line); border-radius: 16px; padding: 28px; box-shadow: 0 14px 34px rgba(16,42,67,.10); }
+.add-course h2 { margin-top: 0; }
+.add-course .field { margin: 16px 0; }
+.add-course label span { display: block; font-weight: 700; margin-bottom: 6px; }
