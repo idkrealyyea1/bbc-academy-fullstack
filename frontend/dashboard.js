@@ -23,7 +23,7 @@
     return new Promise(function (resolve) {
       var back = document.createElement('div');
       back.className = 'dash-dialog-backdrop';
-      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-label="' + h(t(titleEn, titleAr)) + '"><h3>' + h(t(titleEn, titleAr)) + '</h3><p>' + h(t(bodyEn, bodyAr)) + '</p>'
+      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-label="' + h(t(titleEn, titleAr)) + '"><h2 class="dash-dialog-title">' + h(t(titleEn, titleAr)) + '</h2><p>' + h(t(bodyEn, bodyAr)) + '</p>'
         + '<div class="dash-dialog-actions"><button class="btn danger" type="button" id="dashDlgOk">' + h(t('Delete', 'حذف')) + '</button>'
         + '<button class="btn quiet" type="button" id="dashDlgCancel">' + h(t('Cancel', 'إلغاء')) + '</button></div></div>';
       document.body.appendChild(back);
@@ -39,35 +39,65 @@
   }
   function badge(status) {
     var s = String(status || '');
-    var cls = { pending: 'badge-pending', confirmed: 'badge-confirmed', rejected: 'badge-rejected', active: 'badge-active', completed: 'badge-graded', cancelled: 'badge-cancelled', present: 'badge-present', absent: 'badge-absent', late: 'badge-pending', excused: 'badge-submitted', submitted: 'badge-submitted', graded: 'badge-graded' }[s] || '';
-    return '<span class="badge ' + cls + '">' + h(s) + '</span>';
+    var cls = { pending: 'badge-pending', confirmed: 'badge-confirmed', rejected: 'badge-rejected', active: 'badge-active', completed: 'badge-graded', cancelled: 'badge-cancelled', present: 'badge-present', absent: 'badge-absent', late: 'badge-pending', excused: 'badge-submitted', submitted: 'badge-submitted', graded: 'badge-graded', published: 'badge-published', unpublished: 'badge-unpublished' }[s] || '';
+    var labels = { pending: ['Pending', 'معلّقة'], confirmed: ['Confirmed', 'مؤكدة'], rejected: ['Rejected', 'مرفوضة'], active: ['Active', 'نشطة'], completed: ['Completed', 'مكتملة'], cancelled: ['Cancelled', 'ملغاة'], present: ['Present', 'حاضر'], absent: ['Absent', 'غائب'], late: ['Late', 'متأخر'], excused: ['Excused', 'بعذر'], submitted: ['Submitted', 'مُسلَّمة'], graded: ['Graded', 'مصححة'], published: ['Published', 'منشورة'], unpublished: ['Not published', 'غير منشورة'] };
+    var lab = labels[s] ? t(labels[s][0], labels[s][1]) : s;
+    return '<span class="badge ' + cls + '">' + h(lab) + '</span>';
+  }
+  // Mobile stacked tables: copy each header cell's text onto its column's
+  // cells as data-label, so the phone card layout can label every value.
+  function labelTableCells() {
+    content.querySelectorAll('.dash-table-scroll table').forEach(function (tbl) {
+      var heads = [];
+      var first = tbl.querySelector('tr');
+      if (first) first.querySelectorAll('th').forEach(function (th) { heads.push(th.textContent.trim()); });
+      tbl.querySelectorAll('tr').forEach(function (row, i) {
+        if (i === 0) return;
+        Array.prototype.forEach.call(row.children, function (cell, j) {
+          if (cell.tagName === 'TD') cell.setAttribute('data-label', heads[j] || '');
+        });
+      });
+    });
+  }
+  // Readable level names: levels are {id, code, name_en, name_ar}. Never
+  // show a raw level_id — map through this list; unknown ids render '—'.
+  function levelName(levelId, levels) {
+    var found = null;
+    (levels || []).forEach(function (l) { if (String(l.id) === String(levelId)) found = l; });
+    if (!found) return '—';
+    return found.code + ' — ' + (lang === 'ar' ? found.name_ar || found.name_en : found.name_en);
+  }
+  function levelNameByCode(code, levels) {
+    var found = null;
+    (levels || []).forEach(function (l) { if (String(l.code) === String(code)) found = l; });
+    if (!found) return code || '—';
+    return found.code + ' — ' + (lang === 'ar' ? found.name_ar || found.name_en : found.name_en);
   }
   function setBusy(btn, busy) { if (btn) btn.disabled = !!busy; }
-  function refreshCurrent() {
+  async function refreshCurrent() {
     if (!currentMe) return;
-    if (role === 'student') renderStudent(currentMe);
-    else if (role === 'teacher') renderTeacher(currentMe);
-    else renderAdmin(currentMe);
+    if (role === 'student') await renderStudent(currentMe);
+    else if (role === 'teacher') await renderTeacher(currentMe);
+    else await renderAdmin(currentMe);
     accountCard();
     showView(false);
   }
   window.__onLangChange = function () { if (ready) location.reload(); };
 
   function card(label, value, note) {
-    return '<div class="card"><h3>' + h(label) + '</h3><p class="price">' + h(value) + '</p><p class="muted">' + h(note || '') + '</p></div>';
+    return '<div class="card"><h2 class="dash-card-title">' + h(label) + '</h2><p class="price">' + h(value) + '</p><p class="muted">' + h(note || '') + '</p></div>';
   }
   // Every dashboard table renders inside a horizontally scrollable region:
   // on a phone the table keeps its full width (no crushed/wrapped columns,
   // no cut-off action buttons) and the user scrolls it inside the viewport.
   // The hint below the table is shown on narrow screens only (see dashboard.css).
   function table(headers, rows, emptyText) {
-    if (!rows.length) return '<p class="muted">' + h(emptyText) + '</p>';
-    return '<div class="dash-table-scroll" tabindex="0" role="region" aria-label="' + h(t('Table', 'جدول')) + '"><table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>'
-      + '<p class="dash-table-hint">' + h(t('Scroll sideways to see all columns', 'مرّر أفقيًا لعرض كل الأعمدة')) + '</p>';
+    if (!rows.length) return '<div class="dash-empty"><p>' + h(emptyText) + '</p></div>';
+    return '<div class="dash-table-scroll" tabindex="0" role="region" aria-label="' + h(t('Table', 'جدول')) + '"><table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>';
   }
   function dashFor(r) { return r === 'admin' ? 'dashboard-admin.html' : r === 'teacher' ? 'dashboard-teacher.html' : 'dashboard-student.html'; }
   function heading(me, note) {
-    return '<span class="eyebrow page-eyebrow">BBC Academy</span><h1>' + h(t('Welcome, ', 'مرحبًا، ') + (me.full_name || '')) + '</h1><p class="muted">' + h(note) + '</p>';
+    return '<p class="dash-welcome"><strong>' + h(t('Welcome, ', 'مرحبًا، ') + (me.full_name || '')) + '</strong></p><p class="muted">' + h(note) + '</p>';
   }
 
 
@@ -84,22 +114,28 @@
     if (!target) target = views[0];
     views.forEach(function (v) { v.hidden = (v !== target); });
     var nav = document.getElementById('dashNav');
-    if (nav) nav.querySelectorAll('a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + target.dataset.view); });
+    if (nav) nav.querySelectorAll('a').forEach(function (a) {
+      var isActive = a.getAttribute('href') === '#' + target.dataset.view;
+      a.classList.toggle('active', isActive);
+      if (isActive) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
     var pt = document.getElementById('appPageTitle'), cr = document.getElementById('appCrumb');
     var hd = target.querySelector('.dash-view-title');
     if (pt && hd) pt.textContent = hd.textContent;
     if (cr && hd) cr.textContent = hd.textContent;
     if (focusIt) {
-      var hd = target.querySelector('h1, h2');
-      if (hd) { hd.tabIndex = -1; hd.focus(); }
+      var shellTitle = document.getElementById('appPageTitle');
+      if (shellTitle) { shellTitle.tabIndex = -1; shellTitle.focus(); }
     }
   }
   function wireDashChrome() {
     var btn = document.getElementById('dashMenuBtn'), sidebar = document.getElementById('dashSidebar'), nav = document.getElementById('dashNav'), scrim = document.getElementById('dashScrim');
-    var closeMenu = function () {
+    var closeMenu = function (restoreFocus) {
+      var wasOpen = sidebar && sidebar.classList.contains('open');
       if (sidebar) sidebar.classList.remove('open');
       if (scrim) scrim.hidden = true;
       if (btn) btn.setAttribute('aria-expanded', 'false');
+      if (restoreFocus && wasOpen && btn) btn.focus();
     };
     if (btn && sidebar) {
       btn.addEventListener('click', function () {
@@ -108,11 +144,13 @@
         btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         if (open) { var first = sidebar.querySelector('a'); if (first) first.focus(); }
       });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
-      if (scrim) scrim.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(true); });
+      if (scrim) scrim.addEventListener('click', function () { closeMenu(true); });
+      var drawerClose = document.getElementById('dashDrawerClose');
+      if (drawerClose) drawerClose.addEventListener('click', function () { closeMenu(true); });
     }
     if (nav) nav.querySelectorAll('a').forEach(function (a) {
-      a.addEventListener('click', function () { if (window.matchMedia('(max-width: 1023px)').matches) closeMenu(); });
+      a.addEventListener('click', function () { if (window.matchMedia('(max-width: 1023px)').matches) closeMenu(false); });
     });
     var out = document.getElementById('logoutBtn');
     if (out) out.addEventListener('click', function () {
@@ -120,7 +158,7 @@
       localStorage.removeItem('bbc-user');
       location.href = 'index.html';
     });
-    window.addEventListener('hashchange', function () { closeMenu(); showView(true); });
+    window.addEventListener('hashchange', function () { closeMenu(false); showView(true); });
   }
   wireDashChrome();
 
@@ -134,21 +172,41 @@
     sec.id = 'view-account';
     sec.dataset.view = 'account';
     sec.hidden = true;
-    sec.innerHTML = '<h2 class="dash-view-title">' + h(t('Account', 'الحساب')) + '</h2><div class="card">'
-      + '<form id="accountPassword"><div class="field"><label>' + h(t('Current password', 'كلمة المرور الحالية')) + ' <input type="password" name="current_password" required autocomplete="current-password"></label></div>'
-      + '<div class="field"><label>' + h(t('New password (8+ characters)', 'كلمة المرور الجديدة (8 أحرف فأكثر)')) + ' <input type="password" name="new_password" required minlength="8" autocomplete="new-password"></label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Change password', 'تغيير كلمة المرور')) + '</button>'
-      + '<p id="accountPasswordOk" class="muted" hidden style="margin-top:.5rem"></p></form></div>';
+    var roleLab = { student: t('Student', 'طالب'), teacher: t('Teacher', 'معلم'), admin: t('Admin', 'مسؤول') }[(currentMe || {}).role] || (currentMe || {}).role || '';
+    sec.innerHTML = '<h2 class="dash-view-title">' + h(t('Account', 'الحساب')) + '</h2>'
+      + (currentMe ? '<div class="card"><h2 class="dash-card-title">' + h(t('Profile', 'الملف الشخصي')) + '</h2><p><strong>' + h(currentMe.full_name || '') + '</strong></p><p class="muted">' + h(currentMe.email || '') + (roleLab ? ' · ' + h(roleLab) : '') + '</p></div>' : '')
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Change password', 'تغيير كلمة المرور')) + '</h2>'
+      + '<form id="accountPassword" class="dash-form">'
+      + '<div class="field"><label for="accountCurrent">' + h(t('Current password', 'كلمة المرور الحالية')) + ' <span class="dash-req" aria-hidden="true">*</span></label><input id="accountCurrent" type="password" name="current_password" required autocomplete="current-password"></div>'
+      + '<div class="field"><label for="accountNew">' + h(t('New password', 'كلمة المرور الجديدة')) + ' <span class="dash-req" aria-hidden="true">*</span></label><input id="accountNew" type="password" name="new_password" required minlength="8" autocomplete="new-password"><p class="dash-help">' + h(t('At least 8 characters.', '8 أحرف على الأقل.')) + '</p></div>'
+      + '<div class="field"><label for="accountConfirm">' + h(t('Confirm new password', 'تأكيد كلمة المرور الجديدة')) + ' <span class="dash-req" aria-hidden="true">*</span></label><input id="accountConfirm" type="password" name="confirm_password" required minlength="8" autocomplete="new-password"></div>'
+      + '<button class="btn" type="submit">' + h(t('Change password', 'تغيير كلمة المرور')) + '</button>'
+      + '<p id="accountPasswordErr" class="dash-inline-error" hidden role="alert"></p>'
+      + '<p id="accountPasswordOk" class="dash-inline-success" hidden></p></form></div>';
     content.appendChild(sec);
     var form = sec.querySelector('#accountPassword');
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       var okMsg = sec.querySelector('#accountPasswordOk');
+      var errMsg = sec.querySelector('#accountPasswordErr');
+      if (errMsg) errMsg.hidden = true;
+      if (okMsg) okMsg.hidden = true;
+      if (form.elements.new_password.value !== form.elements.confirm_password.value) {
+        if (errMsg) { errMsg.hidden = false; errMsg.textContent = t('New passwords do not match.', 'كلمتا المرور الجديدتان غير متطابقتين.'); }
+        form.elements.confirm_password.focus();
+        return;
+      }
+      var sbtn = form.querySelector('button[type="submit"]');
+      setBusy(sbtn, true);
       try {
         await api.req('/api/profile/password', { method: 'POST', body: { current_password: form.elements.current_password.value, new_password: form.elements.new_password.value } });
         form.reset();
         if (okMsg) { okMsg.hidden = false; okMsg.textContent = t('Password changed. It works from your next login.', 'تم تغيير كلمة المرور. ستُستخدم عند تسجيل الدخول القادم.'); }
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) {
+        if (errMsg) { errMsg.hidden = false; errMsg.textContent = err.message; }
+        toast(err.message, 'error');
+      }
+      setBusy(sbtn, false);
     });
   }
 
@@ -160,18 +218,19 @@
 
   // Section wrapper with heading and action buttons at the end
   function sectionWithButtons(titleEn, titleAr, content, buttonHtml) {
-    return '<div style="margin-top:2rem"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2>' + h(t(titleEn, titleAr)) + '</h2>' + content + (buttonHtml ? '<div style="margin-top:1rem">' + buttonHtml + '</div>' : '') + '</div>';
+    return '<div class="dash-section"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2 class="dash-section-title">' + h(t(titleEn, titleAr)) + '</h2>' + content + (buttonHtml ? '<div class="dash-actions">' + buttonHtml + '</div>' : '') + '</div>';
   }
 
 
   // --- Overview helper: summary cards shown at the top of every dashboard ---
   function overview(titleEn, titleAr, value, noteEn, noteAr) {
-    return '<div class="card" style="margin-bottom:1rem"><h3>' + h(t(titleEn, titleAr)) + '</h3>' + '<p class="price">' + h(value) + '</p>' + '<p class="muted">' + h(t(noteEn || '', noteAr || '')) + '</p></div>';
+    var note = t(noteEn || '', noteAr || '');
+    return '<div class="dash-metric"><span class="dash-metric-label">' + h(t(titleEn, titleAr)) + '</span><strong class="dash-metric-value">' + h(value) + '</strong>' + (note ? '<span class="dash-metric-note">' + h(note) + '</span>' : '') + '</div>';
   }
 
   // --- Helper: section wrapper with eyebrown heading ---
   function section(titleEn, titleAr, content) {
-    return '<div style="margin-top:2rem"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2>' + h(t(titleEn, titleAr)) + '</h2>' + content + '</div>';
+    return '<div class="dash-section"><span class="eyebrow page-eyebrow">BBC Academy</span>' + '<h2 class="dash-section-title">' + h(t(titleEn, titleAr)) + '</h2>' + content + '</div>';
   }
 
 
@@ -216,15 +275,19 @@
     var enr = data[0].enrolments || [], place = data[1].results || [], att = data[2].attendance || [];
     var asg = data[3].assignments || [], ann = data[4].announcements || [], lessons = data[5].lessons || [], courses = data[6].courses || [];
     var cmap = {}; courses.forEach(function (c) { cmap[c.id] = c; });
+    var stuLevels = [];
+    try { stuLevels = (await api.req('/api/levels')).levels || []; } catch (e) { stuLevels = []; }
     var latest = place[0];
     var present = att.filter(function (a) { return a.status === 'present'; }).length;
     var graded = asg.filter(function (a) { return a.submission && a.submission.grade != null; }).length;
     var openAsg = asg.filter(function (a) { return !a.submission; });
     content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.'))
+      + '<div class="dash-statgrid">'
       + overview('My courses', 'دوراتي', enr.length, 'enrolments', 'تسجيل')
-      + overview('My level', 'مستواي', latest ? latest.recommended_level : '—', latest ? 'placement result' : 'not taken yet', latest ? 'نتيجة اختبار المستوى' : 'لم تُجرَ بعد')
+      + overview('My level', 'مستواي', latest ? levelNameByCode(latest.recommended_level, stuLevels) : '—', latest ? 'placement result' : 'not taken yet', latest ? 'نتيجة اختبار المستوى' : 'لم تُجرَ بعد')
       + overview('Attendance', 'الحضور', present + ' / ' + att.length, 'lessons attended', 'حصة حضرتها')
-      + '<p class="muted" style="margin-top:1rem">' + h(t('Grades: ', 'الدرجات: ') + graded + ' / ' + asg.length) + '</p>'
+      + '</div>'
+      + '<p class="muted">' + h(t('Grades: ', 'الدرجات: ') + graded + ' / ' + asg.length) + '</p>'
       + (function () {
         var firstEnr = enr.find(function (e) { return e.status === 'active' || e.status === 'pending'; }) || enr[0];
         var firstCourse = firstEnr ? cmap[firstEnr.course_id] : null;
@@ -233,20 +296,20 @@
         if (!place.length) steps.push('<li>' + h(t('Take the placement test to get your level.', 'أجرِ اختبار تحديد المستوى لمعرفة مستواك.')) + ' <a href="levels.html">' + h(t('Placement test', 'اختبار تحديد المستوى')) + '</a></li>');
         if (openAsg.length) steps.push('<li>' + h(t(openAsg.length + ' homework task(s) waiting for you.', openAsg.length + ' واجب بانتظارك.')) + ' <a href="#homework">' + h(t('Open homework', 'افتح الواجبات')) + '</a></li>');
         if (!enr.length) steps.push('<li>' + h(t('You are not enrolled in any course yet. Book a seat to get started.', 'لست مسجلًا في أي دورة بعد. احجز مقعدًا للبدء.')) + ' <a href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a></li>');
-        return '<div class="card"><h3>' + h(t('Next steps', 'الخطوات التالية')) + '</h3>' + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
+        return '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Next steps', 'الخطوات التالية')) + '</h2>' + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
       })())
       + view('courses', 'My courses', 'دوراتي', '<div class="card">'
       + table([t('Course', 'الدورة'), t('Level', 'المستوى'), t('Status', 'الحالة'), t('Lessons', 'الدروس'), t('Assignments', 'الواجبات'), ''], enr.map(function (e) {
         var c = cmap[e.course_id];
-        if (!c) return '<tr><td>' + h(e.course_id) + '</td><td></td><td>' + badge(e.status) + '</td><td></td><td></td><td></td></tr>';
+        if (!c) return '<tr><td>—</td><td></td><td>' + badge(e.status) + '</td><td></td><td></td><td></td></tr>';
         var lc = lessons.filter(function (l) { return l.course_id === c.id; }).length;
         var ac = asg.filter(function (a) { return a.course_id === c.id; }).length;
-        return '<tr><td>' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</td><td>' + h(c.level_id || '') + '</td><td>' + badge(e.status) + '</td><td>' + lc + '</td><td>' + ac + '</td><td><a class="btn small" href="course.html?id=' + h(c.slug || c.id) + '">' + h(t('Open course', 'افتح الدورة')) + '</a></td></tr>';
+        return '<tr><td>' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</td><td>' + h(levelName(c.level_id, stuLevels)) + '</td><td>' + badge(e.status) + '</td><td>' + lc + '</td><td>' + ac + '</td><td><a class="btn small" href="course.html?id=' + h(c.slug || c.id) + '">' + h(t('Open course', 'افتح الدورة')) + '</a></td></tr>';
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>')
-      + view('progress', 'My progress', 'تقدّمي', '<div class="card"><h3>' + h(t('Placement & level', 'تحديد المستوى')) + '</h3>'
-      + (latest ? '<p>' + h(t('Latest result: ', 'آخر نتيجة: ')) + latest.score + ' / ' + latest.total + ' — ' + h(t('Recommended level: ', 'المستوى الموصى به: ')) + latest.recommended_level + '</p>' : '<p class="muted">' + h(t('No placement test taken yet.', 'لم تُجرَ اختبار تحديد مستوى بعد.')) + ' <a href="levels.html">' + h(t('Take the placement test', 'أجرِ اختبار تحديد المستوى')) + '</a></p>') + '</div>'
-      + '<div class="card"><h3>' + h(t('Attendance', 'الحضور')) + '</h3><p>' + h(t('Present: ', 'الحاضر: ')) + present + ' / ' + att.length + '</p><p class="muted">' + h(t('Attendance counts only records marked present, out of all recorded attendance days for you. Absent, late and excused days are not counted as present.', 'الحضور يحسب فقط الأيام المسجلة كحاضر، من مجموع أيام الحضور المسجلة لك. أيام الغياب والتأخر والعذر لا تُحسب كحاضر.')) + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Grades', 'الدرجات')) + '</h3>'
+      + view('progress', 'My progress', 'تقدّمي', '<div class="card"><h2 class="dash-card-title">' + h(t('Placement & level', 'تحديد المستوى')) + '</h2>'
+      + (latest ? '<p>' + h(t('Latest result: ', 'آخر نتيجة: ')) + latest.score + ' / ' + latest.total + ' — ' + h(t('Recommended level: ', 'المستوى الموصى به: ')) + h(levelNameByCode(latest.recommended_level, stuLevels)) + '</p>' : '<p class="muted">' + h(t('No placement test taken yet.', 'لم تُجرَ اختبار تحديد مستوى بعد.')) + ' <a href="levels.html">' + h(t('Take the placement test', 'أجرِ اختبار تحديد المستوى')) + '</a></p>') + '</div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance', 'الحضور')) + '</h2><p>' + h(t('Present: ', 'الحاضر: ')) + present + ' / ' + att.length + '</p><p class="muted">' + h(t('Attendance counts only records marked present, out of all recorded attendance days for you. Absent, late and excused days are not counted as present.', 'الحضور يحسب فقط الأيام المسجلة كحاضر، من مجموع أيام الحضور المسجلة لك. أيام الغياب والتأخر والعذر لا تُحسب كحاضر.')) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Grades', 'الدرجات')) + '</h2>'
       + table([t('Task', 'المهمة'), t('Grade', 'الدرجة'), t('Feedback', 'ملاحظات')], asg.filter(function (a) { return a.submission && a.submission.grade != null; }).map(function (a) {
         return '<tr><td>' + h(a.title) + '</td><td>' + h(a.submission.grade) + ' / 100</td><td>' + h(a.submission.feedback || '') + '</td></tr>';
       }), t('No grades returned yet.', 'لا توجد درجات بعد.')) + '</div>')
@@ -259,7 +322,7 @@
         return '<tr data-hw-status="' + st + '"><td>' + h(a.title) + '</td><td>' + h(c ? c.title_en : '') + '</td><td>' + badge(st) + ' ' + h(status) + '</td><td>' + h(a.submission && a.submission.feedback ? a.submission.feedback : '') + '</td></tr>';
       }), t('No homework yet.', 'لا توجد واجبات بعد.'))
       + (openAsg.length
-        ? '<form id="studentSubmit" style="margin-top:1rem"><div class="field"><label>' + h(t('Assignment', 'الواجب')) + ' <select name="assignment_id">' + openAsg.map(function (a) { return '<option value="' + h(a.id) + '">' + h(a.title) + '</option>'; }).join('') + '</select></label></div>'
+        ? '<form id="studentSubmit" class="dash-section"><div class="field"><label>' + h(t('Assignment', 'الواجب')) + ' <select name="assignment_id">' + openAsg.map(function (a) { return '<option value="' + h(a.id) + '">' + h(a.title) + '</option>'; }).join('') + '</select></label></div>'
           + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea name="content_text" rows="3" required></textarea></label></div>'
           + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button></form>'
         : '') + '</div>')
@@ -274,6 +337,7 @@
         return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body).replace(/\n/g, '<br>') + '</span></p>';
       }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div>');
 
+    labelTableCells();
     content.querySelectorAll('[data-hw-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         content.querySelectorAll('[data-hw-tab]').forEach(function (x) { x.classList.toggle('active', x === btn); });
@@ -306,6 +370,8 @@
     var courses = (data[3].courses || []).filter(function (c) { return c.teacher_id === me.id; });
     var att = data[4].attendance || [], ann = data[5].announcements || [];
     var cmap = {}; courses.forEach(function (c) { cmap[c.id] = c; });
+    var teaLevels = [];
+    try { teaLevels = (await api.req('/api/levels')).levels || []; } catch (e) { teaLevels = []; }
     var amap = {}; asg.forEach(function (a) { amap[a.id] = a; });
     var students = {}; enr.forEach(function (e) { students[e.student_id] = true; });
     var ungraded = subs.filter(function (s) { return s.grade == null; }).length;
@@ -317,12 +383,16 @@
     };
     var noCourseNote = '<div class="card"><p class="muted">' + h(t('An admin must assign you a course before you can add lessons or assignments.', 'يجب أن يسند إليك المسؤول دورة قبل أن تضيف دروسًا أو واجبات.')) + '</p></div>';
     content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Your classes, students and tasks for today.', 'حصصك وطلابك ومهام اليوم.'))
+      + '<div class="dash-statgrid">'
       + overview('My courses', 'دوراتي', courses.length, '', '')
       + overview('Students', 'الطلاب', Object.keys(students).length, 'across your courses', 'في دوراتك')
-      + overview('To grade', 'بانتظار التصحيح', ungraded, 'submissions', 'تسليم'))
+      + overview('To grade', 'بانتظار التصحيح', ungraded, 'submissions', 'تسليم')
+      + '</div>'
+      + '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Needs attention', 'يحتاج انتباهك')) + '</h2>'
+      + (ungraded ? '<p>' + h(t(ungraded + ' submission(s) waiting for grading.', ungraded + ' تسليم بانتظار التصحيح.')) + ' <a class="btn small" href="#grading">' + h(t('Open grading', 'افتح التصحيح')) + '</a></p>' : '<p class="muted">' + h(t('Nothing waiting for grading right now.', 'لا يوجد شيء بانتظار التصحيح الآن.')) + '</p>') + '</div>')
       + view('classes', 'My classes', 'حصصي', '<div class="card">'
-      + table([t('Class', 'الحصة'), t('Students', 'الطلاب')], courses.map(function (c) {
-        return '<tr><td>' + h(c.title_en) + '</td><td>' + enr.filter(function (e) { return e.course_id === c.id; }).length + '</td></tr>';
+      + table([t('Class', 'الحصة'), t('Level', 'المستوى'), t('Students', 'الطلاب')], courses.map(function (c) {
+        return '<tr><td>' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</td><td>' + h(levelName(c.level_id, teaLevels)) + '</td><td>' + enr.filter(function (e) { return e.course_id === c.id; }).length + '</td></tr>';
       }), t('No courses assigned yet.', 'لا توجد دورات مسندة بعد.')) + '</div>')
       + view('grading', 'Submissions to grade', 'تسليمات للتصحيح', '<div class="card"><div class="dash-tabs" role="tablist">'
       + ['all', 'pending', 'graded'].map(function (s) { return '<button type="button" data-grade-tab="' + s + '" class="' + (s === 'all' ? 'active' : '') + '">' + h(s === 'all' ? t('All', 'الكل') : s === 'pending' ? t('Pending', 'بانتظار التصحيح') : t('Graded', 'مصححة')) + '</button>'; }).join('') + '</div>'
@@ -341,11 +411,11 @@
       + view('attendance', 'Mark attendance', 'تسجيل الحضور', '<div class="card">'
       + '<p class="muted">' + h(t('Recent attendance for your courses is listed below the form. Only students enrolled in the selected course can be marked.', 'سجل الحضور الأخير لدوراتك يظهر أسفل النموذج. يمكن تسجيل الحضور فقط للطلاب المسجلين في الدورة المختارة.')) + '</p>'
       + '<form id="teacherAttendance"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
-      + '<div class="field"><label>' + h(t('Student', 'الطالب')) + ' <select name="student_id" required>' + studentOpts('') + '</select></label></div>'
+      + '<div class="field"><label>' + h(t('Student', 'الطالب')) + ' <select name="student_id" required>' + studentOpts(courses.length ? courses[0].id : '') + '</select></label></div>'
       + '<div class="field"><label>' + h(t('Status', 'الحالة')) + ' <select name="status"><option value="present">' + h(t('Present', 'حاضر')) + '</option><option value="absent">' + h(t('Absent', 'غائب')) + '</option><option value="late">' + h(t('Late', 'متأخر')) + '</option><option value="excused">' + h(t('Excused', 'بعذر')) + '</option></select></label></div>'
       + '<div class="field"><label>' + h(t('Date', 'التاريخ')) + ' <input type="date" name="attended_on" value="' + new Date().toLocaleDateString('en-CA') + '"></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Save attendance', 'حفظ الحضور')) + '</button></form></div>'
-      + '<div class="card" style="margin-top:1rem">'
+      + '<div class="card">'
       + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة'), t('Date', 'التاريخ')], att.slice(0, 30).map(function (a) {
         var c = cmap[a.course_id];
         return '<tr><td>' + h(a.student_name || a.student_id) + '</td><td>' + h(c ? c.title_en : '') + '</td><td>' + badge(a.status) + '</td><td>' + h(a.attended_on || '') + '</td></tr>';
@@ -355,7 +425,7 @@
       + '<div class="field"><label>' + h(t('Body', 'النص')) + ' <textarea name="body" rows="3" required></textarea></label></div>'
       + '<div class="field"><label>' + h(t('Audience', 'الجمهور')) + ' <select name="audience"><option value="all">' + h(t('Everyone', 'الجميع')) + '</option><option value="students">' + h(t('Students', 'الطلاب')) + '</option></select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Publish', 'نشر')) + '</button></form></div>'
-      + '<div class="card" style="margin-top:1rem">'
+      + '<div class="card">'
       + (ann.length ? ann.slice(0, 5).map(function (a) { return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body) + '</span></p>'; }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div>')
       + view('assignments', 'New assignment', 'واجب جديد', courses.length
         ? '<div class="card"><form id="teacherAssignment"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
@@ -372,6 +442,7 @@
           + '<button class="btn small" type="submit">' + h(t('Add lesson', 'إضافة الدرس')) + '</button></form></div>'
         : noCourseNote);
 
+    labelTableCells();
     content.querySelectorAll('[data-grade-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         content.querySelectorAll('[data-grade-tab]').forEach(function (x) { x.classList.toggle('active', x === btn); });
@@ -402,23 +473,31 @@
       courseSel.addEventListener('change', function () { studentSel.innerHTML = studentOpts(courseSel.value); });
       attForm.addEventListener('submit', async function (e) {
         e.preventDefault();
+        var abtn = attForm.querySelector('button[type="submit"]');
+        setBusy(abtn, true);
         try {
           await api.req('/api/attendance', { method: 'POST', body: { course_id: courseSel.value, student_id: studentSel.value, status: attForm.elements.status.value, attended_on: attForm.elements.attended_on.value || null } });
           toast(t('Attendance saved.', 'تم حفظ الحضور.'), 'success'); refreshCurrent();
         } catch (err) { toast(err.message, 'error'); }
+        setBusy(abtn, false);
       });
     }
     var annForm = document.getElementById('teacherAnnouncement');
     if (annForm) annForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var anbtn = annForm.querySelector('button[type="submit"]');
+      setBusy(anbtn, true);
       try {
         await api.req('/api/announcements', { method: 'POST', body: { title: annForm.elements.title.value.trim(), body: annForm.elements.body.value.trim(), audience: annForm.elements.audience.value } });
         toast(t('Announcement published.', 'تم نشر الإعلان.'), 'success'); annForm.reset(); refreshCurrent();
       } catch (err) { toast(err.message, 'error'); }
+      setBusy(anbtn, false);
     });
     var asgForm = document.getElementById('teacherAssignment');
     if (asgForm) asgForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var asbtn = asgForm.querySelector('button[type="submit"]');
+      setBusy(asbtn, true);
       try {
         await api.req('/api/assignments', { method: 'POST', body: {
           course_id: asgForm.elements.course_id.value,
@@ -428,10 +507,13 @@
         }});
         toast(t('Assignment created.', 'تم إنشاء الواجب.'), 'success'); refreshCurrent();
       } catch (err) { toast(err.message, 'error'); }
+      setBusy(asbtn, false);
     });
     var lessonForm = document.getElementById('teacherLesson');
     if (lessonForm) lessonForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var lbtn = lessonForm.querySelector('button[type="submit"]');
+      setBusy(lbtn, true);
       try {
         await api.req('/api/lessons', { method: 'POST', body: {
           course_id: lessonForm.elements.course_id.value,
@@ -441,6 +523,7 @@
         }});
         toast(t('Lesson added.', 'تمت إضافة الدرس.'), 'success'); refreshCurrent();
       } catch (err) { toast(err.message, 'error'); }
+      setBusy(lbtn, false);
     });
   }
 
@@ -472,14 +555,14 @@
     }
     content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Students, courses and bookings at a glance.', 'الطلاب والدورات والحجوزات في لمحة.'))
       + '<div class="dash-statgrid">' + overview('Students', 'الطلاب', students.length, '', '') + overview('Teachers', 'المعلمون', teachers.length, '', '') + overview('Courses', 'الدورات', courses.length, '', '') + overview('Pending bookings', 'حجوزات معلّقة', pending.length, '', '') + overview('Enrolments', 'التسجيلات', enr.length, '', '') + '</div>'
-      + '<div class="card"><h3>' + h(t('Needs your attention', 'يحتاج انتباهك')) + '</h3>' + needsHtml + '</div>'
-      + '<div class="card"><h3>' + h(t('Quick actions', 'إجراءات سريعة')) + '</h3><p><a class="btn small" href="#accounts">' + h(t('Add student', 'إضافة طالب')) + '</a> <a class="btn small" href="#people">' + h(t('Add teacher', 'إضافة معلم')) + '</a> <a class="btn small" href="#courses">' + h(t('Create course', 'إنشاء دورة')) + '</a> <a class="btn small" href="#bookings">' + h(t('Review bookings', 'مراجعة الطلبات')) + '</a></p></div>'
-      + '<div class="card"><h3>' + h(t('Recent bookings', 'أحدث الطلبات')) + '</h3>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Needs your attention', 'يحتاج انتباهك')) + '</h2>' + needsHtml + '</div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Quick actions', 'إجراءات سريعة')) + '</h2><div class="dash-actions"><a class="btn" href="#accounts">' + h(t('Add student', 'إضافة طالب')) + '</a><a class="btn quiet" href="#people">' + h(t('Add teacher', 'إضافة معلم')) + '</a><a class="btn quiet" href="#courses">' + h(t('Create course', 'إنشاء دورة')) + '</a><a class="btn quiet" href="#bookings">' + h(t('Review bookings', 'مراجعة الطلبات')) + '</a></div></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Recent bookings', 'أحدث الطلبات')) + '</h2>'
       + table([t('Name', 'الاسم'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], recentBookings.map(function (b) {
         return '<tr><td>' + h(b.full_name) + '</td><td>' + h(b.course || '') + '</td><td>' + badge(b.status) + '</td><td>' + (b.status === 'pending' ? '<button class="btn small" data-confirm="' + h(b.id) + '">' + h(t('Confirm', 'تأكيد')) + '</button>' : '') + '</td></tr>';
       }), t('No booking requests yet.', 'لا توجد طلبات حجز بعد.')) + '</div>')
       + view('students', 'Students', 'الطلاب', '<div class="dash-filterbar"><label>' + h(t('Search students', 'ابحث في الطلاب')) + ' <input type="search" id="adminStudentSearch" placeholder="' + h(t('Name, email or username', 'الاسم أو البريد أو اسم المستخدم')) + '"></label></div>'
-      + '<div class="card"><h3>' + h(t('Enrol a student', 'تسجيل طالب في دورة')) + '</h3>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Enrol a student', 'تسجيل طالب في دورة')) + '</h2>'
       + '<form id="adminEnrolForm"><div class="field"><label>' + h(t('Student', 'الطالب')) + ' <select name="student_id">' + students.map(function (u) { return '<option value="' + h(u.id) + '">' + h(u.full_name) + ' (' + h(u.email) + ')</option>'; }).join('') + '</select></label></div>'
       + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('Choose a course', 'اختر دورة')) + '</option>' + courseOpts + '</select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Enrol', 'سجّل')) + '</button></form></div>'
@@ -507,15 +590,15 @@
       + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
       + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('No enrolment', 'بدون تسجيل')) + '</option>' + courseOpts + '</select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create student account', 'إنشاء حساب الطالب')) + '</button></form>'
-      + '<div id="adminCreateAccountOk" class="success" hidden style="margin-top:1rem"></div></div>')
+      + '<div id="adminCreateAccountOk" class="success" hidden></div></div>')
       + view('people', 'People', 'الأشخاص', '<div class="dash-filterbar"><label>' + h(t('Search people', 'ابحث في الأشخاص')) + ' <input type="search" id="adminPeopleSearch" placeholder="' + h(t('Name, email or username', 'الاسم أو البريد أو اسم المستخدم')) + '"></label><label>' + h(t('Role', 'الدور')) + ' <select id="adminPeopleRole"><option value="">' + h(t('All roles', 'كل الأدوار')) + '</option><option value="student">' + h(t('Student', 'طالب')) + '</option><option value="teacher">' + h(t('Teacher', 'معلم')) + '</option><option value="admin">' + h(t('Admin', 'مسؤول')) + '</option></select></label></div>'
-      + '<div class="card"><h3>' + h(t('Create a teacher', 'إنشاء حساب معلم')) + '</h3>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Create a teacher', 'إنشاء حساب معلم')) + '</h2>'
       + '<form id="adminCreateTeacherForm"><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required></label></div>'
       + '<div class="field"><label>' + h(t('Username (optional)', 'اسم المستخدم (اختياري)')) + ' <input name="username"></label></div>'
       + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" required></label></div>'
       + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create teacher', 'إنشاء معلم')) + '</button></form>'
-      + '<div id="adminCreateTeacherOk" class="success" hidden style="margin-top:1rem"></div></div>'
+      + '<div id="adminCreateTeacherOk" class="success" hidden></div></div>'
       + '<div class="card">'
       + table([t('Name', 'الاسم'), t('Email', 'البريد'), t('Role', 'الدور'), t('New password', 'كلمة مرور جديدة'), ''], users.map(function (u) {
         return '<tr data-search-text="' + h((u.full_name + ' ' + u.email + ' ' + (u.username || '')).toLowerCase()) + '" data-role-row="' + h(u.role) + '"><td>' + h(u.full_name) + '</td><td>' + h(u.email) + '</td>'
@@ -523,48 +606,62 @@
           + '<td><input type="password" data-pw-for="' + h(u.id) + '" placeholder="' + h(t('8+ characters', '8 أحرف فأكثر')) + '" style="width:150px"></td>'
           + '<td><button class="btn small" data-save-user="' + h(u.id) + '">' + h(t('Save', 'حفظ')) + '</button>' + (u.id === me.id ? '' : ' <button class="btn small outline" data-delete-user="' + h(u.id) + '">' + h(t('Delete', 'حذف')) + '</button>') + '</td></tr>';
       }), t('No users yet.', 'لا يوجد مستخدمون بعد.')) + '</div>')
-      + view('courses', 'Courses and teachers', 'الدورات والمعلمون', '<div class="card"><h3>' + h(t('Create a course', 'إنشاء دورة')) + '</h3>'
-      + '<form id="adminCreateCourseForm"><div class="field"><label>' + h(t('Title (English)', 'العنوان بالإنجليزية')) + ' <input name="title_en" id="adminCourseTitleEn" required></label></div>'
-      + '<div class="field"><label>' + h(t('Title (Arabic, optional)', 'العنوان بالعربية (اختياري)')) + ' <input name="title_ar"></label></div>'
-      + '<div class="field"><label>' + h(t('Slug (lowercase, hyphens only)', 'المعرّف (أحرف صغيرة وشرطات فقط)')) + ' <input name="slug" id="adminCourseSlug" required></label></div>'
-      + '<div class="field"><label>' + h(t('Level', 'المستوى')) + ' <select name="level_id"><option value="">' + h(t('No level', 'بدون مستوى')) + '</option>' + levels.map(function (l) { return '<option value="' + h(l.id) + '">' + h(l.code) + ' — ' + h(lang === 'ar' ? l.name_ar || l.name_en : l.name_en) + '</option>'; }).join('') + '</select></label></div>'
-      + '<div class="field"><label>' + h(t('Weeks (optional)', 'عدد الأسابيع (اختياري)')) + ' <input name="duration_weeks" type="number" min="1"></label></div>'
-      + '<div class="field"><label>' + h(t('Teacher', 'المعلم')) + ' <select name="teacher_id"><option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) { return '<option value="' + h(u.id) + '">' + h(u.full_name) + '</option>'; }).join('') + '</select></label></div>'
-      + '<div class="field"><label><input name="is_published" type="checkbox" checked> ' + h(t('Published (visible to everyone)', 'منشورة (ظاهرة للجميع)')) + '</label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Create course', 'إنشاء دورة')) + '</button></form>'
-      + '<div id="adminCreateCourseOk" class="success" hidden style="margin-top:1rem"></div></div>'
+      + view('courses', 'Courses and teachers', 'الدورات والمعلمون', '<div class="card"><h2 class="dash-card-title">' + h(t('Create a course', 'إنشاء دورة')) + '</h2>'
+      + '<form id="adminCreateCourseForm" class="dash-form">'
+      + '<fieldset class="dash-fieldset"><legend>' + h(t('1. Course information', '1. معلومات الدورة')) + '</legend>'
+      + '<div class="dash-form-grid">'
+      + '<div class="field"><label for="adminCourseTitleEn">' + h(t('Title (English)', 'العنوان بالإنجليزية')) + ' <span class="dash-req" aria-hidden="true">*</span></label><input name="title_en" id="adminCourseTitleEn" required></div>'
+      + '<div class="field"><label for="courseTitleAr">' + h(t('Title (Arabic)', 'العنوان بالعربية')) + ' <span class="dash-opt">' + h(t('(optional)', '(اختياري)')) + '</span></label><input name="title_ar" id="courseTitleAr"></div>'
+      + '</div>'
+      + '<div class="field"><label for="adminCourseSlug">' + h(t('Slug', 'المعرّف')) + ' <span class="dash-req" aria-hidden="true">*</span></label><input name="slug" id="adminCourseSlug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" dir="ltr"><p class="dash-help">' + h(t('Lowercase letters, numbers and hyphens only. Used in the course link; it fills in from the English title until you edit it.', 'أحرف صغيرة وأرقام وشرطات فقط. يُستخدم في رابط الدورة، ويُملأ تلقائيًا من العنوان الإنجليزي حتى تعدّله.')) + '</p></div>'
+      + '</fieldset>'
+      + '<fieldset class="dash-fieldset"><legend>' + h(t('2. Level and duration', '2. المستوى والمدة')) + '</legend>'
+      + '<div class="dash-form-grid">'
+      + '<div class="field"><label for="courseLevel">' + h(t('Level', 'المستوى')) + ' <span class="dash-opt">' + h(t('(optional)', '(اختياري)')) + '</span></label><select name="level_id" id="courseLevel"><option value="">' + h(t('No level', 'بدون مستوى')) + '</option>' + levels.map(function (l) { return '<option value="' + h(l.id) + '">' + h(l.code) + ' — ' + h(lang === 'ar' ? l.name_ar || l.name_en : l.name_en) + '</option>'; }).join('') + '</select></div>'
+      + '<div class="field"><label for="courseWeeks">' + h(t('Duration (weeks)', 'المدة (بالأسابيع)')) + ' <span class="dash-opt">' + h(t('(optional)', '(اختياري)')) + '</span></label><input name="duration_weeks" id="courseWeeks" type="number" min="1" step="1" inputmode="numeric"></div>'
+      + '</div></fieldset>'
+      + '<fieldset class="dash-fieldset"><legend>' + h(t('3. Teacher assignment', '3. إسناد المعلم')) + '</legend>'
+      + '<div class="field"><label for="courseTeacher">' + h(t('Teacher', 'المعلم')) + ' <span class="dash-opt">' + h(t('(optional)', '(اختياري)')) + '</span></label><select name="teacher_id" id="courseTeacher"><option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) { return '<option value="' + h(u.id) + '">' + h(u.full_name) + '</option>'; }).join('') + '</select><p class="dash-help">' + h(t('Teachers are listed by name. Leave unassigned if no teacher is chosen yet.', 'المعلمون معروضون بالاسم. اتركه غير مسند إن لم يُختر معلم بعد.')) + '</p></div>'
+      + '</fieldset>'
+      + '<fieldset class="dash-fieldset"><legend>' + h(t('4. Visibility', '4. الظهور')) + '</legend>'
+      + '<div class="field"><label class="dash-switch"><input name="is_published" id="coursePublished" type="checkbox" checked><span class="dash-switch-track" aria-hidden="true"><span class="dash-switch-knob"></span></span><span>' + h(t('Published (visible to everyone)', 'منشورة (ظاهرة للجميع)')) + '</span></label></div>'
+      + '</fieldset>'
+      + '<button class="btn" type="submit">' + h(t('Create course', 'إنشاء دورة')) + '</button></form>'
+      + '<div id="adminCreateCourseOk" class="success" hidden></div></div>'
       + '<div class="card">'
-      + table([t('Course', 'الدورة'), t('Teacher', 'المعلم'), ''], courses.map(function (c) {
+      + table([t('Course', 'الدورة'), t('Level', 'المستوى'), t('Duration', 'المدة'), t('Teacher', 'المعلم'), t('Status', 'الحالة'), ''], courses.map(function (c) {
         var opts = '<option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) {
           return '<option value="' + h(u.id) + '"' + (c.teacher_id === u.id ? ' selected' : '') + '>' + h(u.full_name) + '</option>';
         }).join('');
-        return '<tr><td>' + h(c.title_en) + '</td><td><select data-teacher-for="' + h(c.id) + '">' + opts + '</select></td>'
+        return '<tr><td>' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</td><td>' + h(levelName(c.level_id, levels)) + '</td><td>' + h(c.duration_weeks ? c.duration_weeks + ' ' + t('weeks', 'أسابيع') : '—') + '</td><td><select data-teacher-for="' + h(c.id) + '">' + opts + '</select></td>'
+          + '<td>' + (('is_published' in c) ? badge(c.is_published ? 'published' : 'unpublished') : '—') + '</td>'
           + '<td><button class="btn small" data-save-course="' + h(c.id) + '">' + h(t('Save', 'حفظ')) + '</button> <button class="btn small outline" data-delete-course="' + h(c.id) + '">' + h(t('Delete', 'حذف')) + '</button></td></tr>';
       }), t('No courses yet.', 'لا توجد دورات بعد.')) + '</div>')
       + view('enrolments', 'Recent enrolments', 'أحدث التسجيلات', '<div class="card">'
       + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], enr.slice(0, 20).map(function (e) {
         var c = cmap[e.course_id];
         var approve = e.status === 'pending' ? '<button class="btn small" data-approve="' + h(e.id) + '">' + h(t('Approve', 'موافقة')) + '</button>' : '';
-        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td><td>' + approve + ' <button class="btn small outline" data-remove-enrolment="' + h(e.id) + '">' + h(t('Remove', 'إزالة')) + '</button></td></tr>';
+        return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + badge(e.status) + '</td><td>' + approve + ' <button class="btn small outline" data-remove-enrolment="' + h(e.id) + '">' + h(t('Remove', 'إزالة')) + '</button></td></tr>';
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>')
-      + view('reports', 'Reports', 'التقارير', '<div class="card"><h3>' + h(t('Academy summary (real counts only)', 'ملخص الأكاديمية (أعداد حقيقية فقط)')) + '</h3>'
+      + view('reports', 'Reports', 'التقارير', '<div class="card"><h2 class="dash-card-title">' + h(t('Academy summary (real counts only)', 'ملخص الأكاديمية (أعداد حقيقية فقط)')) + '</h2>'
       + '<div class="dash-statgrid">' + overview('Students', 'الطلاب', students.length, '', '') + overview('Teachers', 'المعلمون', teachers.length, '', '') + overview('Courses', 'الدورات', courses.length, '', '') + overview('Enrolments', 'التسجيلات', enr.length, '', '') + '</div>'
       + '<p>' + h(t('Bookings: ', 'الطلبات: ')) + ['pending', 'confirmed', 'rejected'].map(function (s) { return s + ': ' + bookings.filter(function (b) { return b.status === s; }).length; }).join(' · ') + '</p>'
       + '<p>' + h(t('Enrolments: ', 'التسجيلات: ')) + ['pending', 'active', 'completed', 'cancelled'].map(function (s) { return s + ': ' + enr.filter(function (e) { return e.status === s; }).length; }).join(' · ') + '</p>'
       + '<p class="muted">' + h(t('No charts or exports are offered: this summary uses only counts already available to the admin.', 'لا توجد رسوم بيانية أو تصدير: هذا الملخص يستخدم فقط الأعداد المتاحة للمسؤول.')) + '</p></div>')
-      + view('operations', 'Academic operations', 'العمليات الأكاديمية', '<div class="card"><h3>' + h(t('Levels', 'المستويات')) + '</h3><p>' + levels.map(function (l) { return h(l.code) + ' — ' + h(lang === 'ar' ? l.name_ar || l.name_en : l.name_en); }).join(' · ') + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Lessons', 'الدروس')) + '</h3><p>' + h(t('Total lessons: ', 'إجمالي الدروس: ')) + (ops.lessons == null ? h(t('could not load', 'تعذّر التحميل')) : ops.lessons.length) + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Assignments', 'الواجبات')) + '</h3><p>' + h(t('Total assignments: ', 'إجمالي الواجبات: ')) + (ops.assignments == null ? h(t('could not load', 'تعذّر التحميل')) : ops.assignments.length) + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Submissions', 'التسليمات')) + '</h3><p>' + h(t('Total submissions: ', 'إجمالي التسليمات: ')) + (ops.submissions == null ? h(t('could not load', 'تعذّر التحميل')) : ops.submissions.length) + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Attendance records', 'سجلات الحضور')) + '</h3><p>' + h(t('Total records: ', 'إجمالي السجلات: ')) + (ops.attendance == null ? h(t('could not load', 'تعذّر التحميل')) : ops.attendance.length) + '</p></div>'
-      + '<div class="card"><h3>' + h(t('Announcements', 'الإعلانات')) + '</h3>'
+      + view('operations', 'Academic operations', 'العمليات الأكاديمية', '<div class="card"><h2 class="dash-card-title">' + h(t('Levels', 'المستويات')) + '</h2><p>' + levels.map(function (l) { return h(l.code) + ' — ' + h(lang === 'ar' ? l.name_ar || l.name_en : l.name_en); }).join(' · ') + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Lessons', 'الدروس')) + '</h2><p>' + h(t('Total lessons: ', 'إجمالي الدروس: ')) + (ops.lessons == null ? h(t('could not load', 'تعذّر التحميل')) : ops.lessons.length) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Assignments', 'الواجبات')) + '</h2><p>' + h(t('Total assignments: ', 'إجمالي الواجبات: ')) + (ops.assignments == null ? h(t('could not load', 'تعذّر التحميل')) : ops.assignments.length) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Submissions', 'التسليمات')) + '</h2><p>' + h(t('Total submissions: ', 'إجمالي التسليمات: ')) + (ops.submissions == null ? h(t('could not load', 'تعذّر التحميل')) : ops.submissions.length) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance records', 'سجلات الحضور')) + '</h2><p>' + h(t('Total records: ', 'إجمالي السجلات: ')) + (ops.attendance == null ? h(t('could not load', 'تعذّر التحميل')) : ops.attendance.length) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Announcements', 'الإعلانات')) + '</h2>'
       + (ops.announcements == null ? '<p class="muted">' + h(t('Could not load announcements.', 'تعذّر تحميل الإعلانات.')) + '</p>'
         : (ops.announcements.length ? ops.announcements.slice(0, 10).map(function (a) { return '<p><strong>' + h(a.title) + '</strong> <span class="muted">(' + h(a.audience || 'all') + ')</span><br><span class="muted">' + h(a.body) + '</span></p>'; }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>'))
-      + '<form id="adminAnnouncement" style="margin-top:1rem"><div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required></label></div>'
+      + '<form id="adminAnnouncement" class="dash-section"><div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required></label></div>'
       + '<div class="field"><label>' + h(t('Body', 'النص')) + ' <textarea name="body" rows="3" required></textarea></label></div>'
       + '<div class="field"><label>' + h(t('Audience', 'الجمهور')) + ' <select name="audience"><option value="all">' + h(t('Everyone', 'الجميع')) + '</option><option value="students">' + h(t('Students', 'الطلاب')) + '</option><option value="teachers">' + h(t('Teachers', 'المعلمون')) + '</option></select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Publish announcement', 'نشر إعلان')) + '</button></form></div>');
 
+    labelTableCells();
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
       b.addEventListener('click', async function () {
         try { await api.req('/api/admin/booking-requests/' + b.dataset.confirm, { method: 'PUT', body: { status: 'confirmed' } }); toast(t('Booking confirmed.', 'تم تأكيد الحجز.'), 'success'); refreshCurrent(); }
@@ -683,22 +780,29 @@
     var enrolForm = document.getElementById('adminEnrolForm');
     if (enrolForm) enrolForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var ebtn = enrolForm.querySelector('button[type="submit"]');
+      setBusy(ebtn, true);
       try {
         await api.req('/api/admin/enrolments', { method: 'POST', body: { student_id: enrolForm.elements.student_id.value, course_id: enrolForm.elements.course_id.value, status: 'active' } });
         toast(t('Student enrolled.', 'تم تسجيل الطالب.'), 'success'); refreshCurrent();
       } catch (err) { toast(err.message, 'error'); }
+      setBusy(ebtn, false);
     });
     var teacherForm = document.getElementById('adminCreateTeacherForm');
     if (teacherForm) teacherForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var tbtn = teacherForm.querySelector('button[type="submit"]');
+      setBusy(tbtn, true);
       try {
         var tu = await api.req('/api/admin/users', { method: 'POST', body: {
           full_name: teacherForm.elements.full_name.value.trim(), username: teacherForm.elements.username.value.trim() || null,
           email: teacherForm.elements.email.value.trim(), password: teacherForm.elements.password.value, role: 'teacher' } });
+        toast(t('Teacher account created for ', 'تم إنشاء حساب المعلم ') + tu.user.email, 'success');
         var tok = document.getElementById('adminCreateTeacherOk');
         if (tok) { tok.hidden = false; tok.textContent = (lang === 'ar' ? 'تم إنشاء حساب المعلم ' : 'Teacher account created for ') + tu.user.email + ' ✔'; }
         teacherForm.reset(); refreshCurrent();
       } catch (err) { toast((lang === 'ar' ? 'فشل إنشاء المعلم: ' : 'Teacher creation failed: ') + err.message, 'error'); }
+      setBusy(tbtn, false);
     });
     var courseForm = document.getElementById('adminCreateCourseForm');
     if (courseForm) {
@@ -713,20 +817,26 @@
       }
       courseForm.addEventListener('submit', async function (e) {
         e.preventDefault();
+        var cbtn = courseForm.querySelector('button[type="submit"]');
+        setBusy(cbtn, true);
         try {
           var cc = await api.req('/api/courses', { method: 'POST', body: {
             title_en: courseForm.elements.title_en.value.trim(), title_ar: courseForm.elements.title_ar.value.trim() || null,
             slug: courseForm.elements.slug.value.trim(), level_id: courseForm.elements.level_id.value || null,
             duration_weeks: courseForm.elements.duration_weeks.value ? Number(courseForm.elements.duration_weeks.value) : null,
             teacher_id: courseForm.elements.teacher_id.value || null, is_published: courseForm.elements.is_published.checked } });
+          toast(t('Course created: ', 'تم إنشاء الدورة ') + cc.course.title_en, 'success');
           var cok = document.getElementById('adminCreateCourseOk');
           if (cok) { cok.hidden = false; cok.textContent = (lang === 'ar' ? 'تم إنشاء الدورة ' : 'Course created: ') + cc.course.title_en + ' ✔'; }
           courseForm.reset(); refreshCurrent();
         } catch (err) { toast((lang === 'ar' ? 'فشل إنشاء الدورة: ' : 'Course creation failed: ') + err.message, 'error'); }
+        setBusy(cbtn, false);
       });
     }
     if (form) form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var fbtn = form.querySelector('button[type="submit"]');
+      setBusy(fbtn, true);
       try {
         var created = await api.req('/api/admin/users', { method: 'POST', body: {
           full_name: form.elements.full_name.value.trim(), email: form.elements.email.value.trim(),
@@ -739,6 +849,7 @@
         location.hash = '#accounts';
         refreshCurrent();
       } catch (err) { toast((lang === 'ar' ? 'فشل إنشاء الحساب: ' : 'Account creation failed: ') + err.message, 'error'); }
+      setBusy(fbtn, false);
     });
 
   }
