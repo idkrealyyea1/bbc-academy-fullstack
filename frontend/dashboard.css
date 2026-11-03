@@ -1,0 +1,187 @@
+/* BBC Academy — dashboard shell only.
+   Loaded ONLY by dashboard-admin/teacher/student.html, and every rule below
+   is scoped under body.dashboard-page, so public pages are untouched even
+   though they share the same brand colours (navy #102a43, red #c94243). */
+
+/* --- Dashboard header: its own place, not the public site --- */
+body.dashboard-page { background: #f6f2e9; }
+body.dashboard-page .dash-header {
+  background: #102a43;
+  color: #fffdf8;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 12px rgba(16, 42, 67, .25);
+}
+body.dashboard-page .dash-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+body.dashboard-page .dash-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fffdf8;
+  text-decoration: none;
+}
+body.dashboard-page .dash-brand-copy { display: flex; flex-direction: column; line-height: 1.1; }
+body.dashboard-page .dash-brand-copy strong { letter-spacing: .08em; }
+body.dashboard-page .dash-brand-copy small { color: #e4b498; font-size: .8rem; }
+body.dashboard-page .dash-role {
+  background: #c94243;
+  color: #fff;
+  font-weight: 700;
+  font-size: .85rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+body.dashboard-page .dash-menu-btn {
+  margin-inline-start: auto;
+  background: transparent;
+  color: #fffdf8;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: .95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+body.dashboard-page .dash-menu-btn[aria-expanded="true"] {
+  background: #c94243;
+  border-color: #c94243;
+}
+body.dashboard-page .dash-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+body.dashboard-page .dash-header-actions .lang-toggle { color: #fffdf8; }
+
+/* --- Hamburger menu: in-flow panel, never an overlay over content --- */
+body.dashboard-page .dash-nav {
+  display: none;
+  border-top: 1px solid rgba(255, 255, 255, .18);
+  background: #0b2035;
+}
+body.dashboard-page .dash-nav.open { display: block; }
+body.dashboard-page .dash-nav .wrap {
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+body.dashboard-page .dash-nav a {
+  color: #fffdf8;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 11px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+}
+body.dashboard-page .dash-nav a:last-child { border-bottom: 0; }
+body.dashboard-page .dash-nav a.active {
+  color: #e4b498;
+  border-inline-start: 3px solid #c94243;
+  padding-inline-start: 10px;
+}
+@media (min-width: 900px) {
+  body.dashboard-page .dash-nav .wrap { flex-direction: row; flex-wrap: wrap; gap: 4px 22px; }
+  body.dashboard-page .dash-nav a { border-bottom: 0; }
+}
+
+/* --- Views: one focused page at a time --- */
+body.dashboard-page .dash-view { max-width: 960px; }
+body.dashboard-page .dash-view-title {
+  color: #102a43;
+  font-size: 1.6rem;
+  margin: 8px 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #c94243;
+}
+body.dashboard-page .dash-view .card { background: #fffdf8; }
+body.dashboard-page .dash-view .card + .card { margin-top: 1rem; }
+
+/* Tables scroll inside .dash-table-scroll (see the table() helper in
+   dashboard.js); the table itself must stay display:table, otherwise its
+   rows overflow the table box and the scroll region's scrollWidth no longer
+   covers the action buttons. */
+body.dashboard-page .dash-view th,
+body.dashboard-page .dash-view td { padding: 8px 10px; vertical-align: middle; }
+
+/* --- Minimal dashboard footer (no public-site navigation) --- */
+body.dashboard-page .dash-footer {
+  border-top: 1px solid rgba(16, 42, 67, .15);
+  color: #102a43;
+  padding: 18px 0 28px;
+  margin-top: 2rem;
+}
+
+/* --- Views: hidden must stay hidden; calm, consistent spacing --- */
+body.dashboard-page .dash-view[hidden] { display: none !important; }
+body.dashboard-page .dash-view { padding: 0 0 24px; }
+body.dashboard-page .dash-view .card { margin-top: 0; }
+
+/* --- Tables: scroll inside the viewport, never past it --- */
+body.dashboard-page .dash-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  border: 1px solid rgba(16, 42, 67, .15);
+  border-radius: 12px;
+  background: #fffdf8;
+  scrollbar-width: thin;
+  scrollbar-color: #c94243 rgba(16, 42, 67, .1);
+}
+body.dashboard-page .dash-table-scroll::-webkit-scrollbar { height: 8px; }
+body.dashboard-page .dash-table-scroll::-webkit-scrollbar-thumb { background: #c94243; border-radius: 999px; }
+body.dashboard-page .dash-table-scroll::-webkit-scrollbar-track { background: rgba(16, 42, 67, .08); }
+body.dashboard-page .dash-table-scroll table {
+  min-width: 520px;
+  width: 100%;
+  border-collapse: collapse;
+}
+body.dashboard-page .dash-table-scroll th,
+body.dashboard-page .dash-table-scroll td {
+  white-space: nowrap;
+  padding: 10px 12px;
+  text-align: start;
+  vertical-align: middle;
+}
+/* Visible scroll cue on phones only; hidden on desktop where tables fit. */
+body.dashboard-page .dash-table-hint { display: none; }
+@media (max-width: 640px) {
+  body.dashboard-page .dash-table-hint {
+    display: block;
+    color: #102a43;
+    font-size: .85rem;
+    margin: 6px 0 0;
+  }
+}
+
+/* --- Careful polish: touch targets, labels, no runaway text --- */
+body.dashboard-page { overflow-x: hidden; }
+body.dashboard-page .dash-view h1,
+body.dashboard-page .dash-view h2,
+body.dashboard-page .dash-view h3 { overflow-wrap: break-word; }
+body.dashboard-page .dash-view .btn { min-height: 44px; }
+body.dashboard-page .dash-view select,
+body.dashboard-page .dash-view input,
+body.dashboard-page .dash-view textarea {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+body.dashboard-page .dash-view .field { margin-bottom: 12px; }
+body.dashboard-page .dash-view .field label { display: block; }
+body.dashboard-page .dash-view .field input,
+body.dashboard-page .dash-view .field select,
+body.dashboard-page .dash-view .field textarea { width: 100%; }
+body.dashboard-page .dash-menu-btn,
+body.dashboard-page #logoutBtn,
+body.dashboard-page .dash-header-actions .lang-toggle { min-height: 44px; }
+body.dashboard-page .dash-menu-btn:focus-visible,
+body.dashboard-page #logoutBtn:focus-visible,
+body.dashboard-page .dash-nav a:focus-visible { outline: 3px solid #e4b498; outline-offset: 2px; }

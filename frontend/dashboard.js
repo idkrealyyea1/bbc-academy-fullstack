@@ -14,42 +14,84 @@
   function card(label, value, note) {
     return '<div class="card"><h3>' + h(label) + '</h3><p class="price">' + h(value) + '</p><p class="muted">' + h(note || '') + '</p></div>';
   }
+  // Every dashboard table renders inside a horizontally scrollable region:
+  // on a phone the table keeps its full width (no crushed/wrapped columns,
+  // no cut-off action buttons) and the user scrolls it inside the viewport.
+  // The hint below the table is shown on narrow screens only (see dashboard.css).
   function table(headers, rows, emptyText) {
     if (!rows.length) return '<p class="muted">' + h(emptyText) + '</p>';
-    return '<table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table>';
+    return '<div class="dash-table-scroll" tabindex="0" role="region" aria-label="' + h(t('Table', 'جدول')) + '"><table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>'
+      + '<p class="dash-table-hint">' + h(t('Scroll sideways to see all columns', 'مرّر أفقيًا لعرض كل الأعمدة')) + '</p>';
   }
   function dashFor(r) { return r === 'admin' ? 'dashboard-admin.html' : r === 'teacher' ? 'dashboard-teacher.html' : 'dashboard-student.html'; }
-  function logoutLink() {
-    var link = document.querySelector('.nav-actions a[href="login.html"]');
-    if (!link) return;
-    link.href = '#';
-    link.textContent = t('Log out', 'خروج');
-    link.addEventListener('click', function (e) {
-      e.preventDefault();
-      localStorage.removeItem('bbc-token');
-      localStorage.removeItem('bbc-user');
-      location.href = 'index.html';
-    });
-  }
   function heading(me, note) {
     return '<span class="eyebrow page-eyebrow">BBC Academy</span><h1>' + h(t('Welcome, ', 'مرحبًا، ') + (me.full_name || '')) + '</h1><p class="muted">' + h(note) + '</p>';
   }
 
+
+  // --- Dashboard shell: one view ("page") per section, hash-routed ---
+  function view(id, titleEn, titleAr, inner) {
+    return '<section class="dash-view" id="view-' + id + '" data-view="' + id + '" hidden><h2 class="dash-view-title" id="view-' + id + '-title">' + h(t(titleEn, titleAr)) + '</h2>' + inner + '</section>';
+  }
+  function showView(focusIt) {
+    var views = Array.prototype.slice.call(content.querySelectorAll('.dash-view'));
+    if (!views.length) return;
+    var hash = (location.hash || '').replace(/^#/, '');
+    var target = null;
+    for (var i = 0; i < views.length; i++) { if (views[i].dataset.view === hash) { target = views[i]; break; } }
+    if (!target) target = views[0];
+    views.forEach(function (v) { v.hidden = (v !== target); });
+    var nav = document.getElementById('dashNav');
+    if (nav) nav.querySelectorAll('a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + target.dataset.view); });
+    if (focusIt) {
+      var hd = target.querySelector('h1, h2');
+      if (hd) { hd.tabIndex = -1; hd.focus(); }
+    }
+  }
+  function wireDashChrome() {
+    var btn = document.getElementById('dashMenuBtn'), nav = document.getElementById('dashNav');
+    if (btn && nav) {
+      btn.addEventListener('click', function () {
+        var open = nav.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      nav.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () { nav.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); });
+      });
+    }
+    var out = document.getElementById('logoutBtn');
+    if (out) out.addEventListener('click', function () {
+      localStorage.removeItem('bbc-token');
+      localStorage.removeItem('bbc-user');
+      location.href = 'index.html';
+    });
+    window.addEventListener('hashchange', function () {
+      var nav2 = document.getElementById('dashNav'), btn2 = document.getElementById('dashMenuBtn');
+      if (nav2) nav2.classList.remove('open');
+      if (btn2) btn2.setAttribute('aria-expanded', 'false');
+      showView(true);
+    });
+  }
+  wireDashChrome();
+
   // Every role gets the same account block: change your own password.
+  // It is its own view (#account) so it participates in hash routing.
   function accountCard() {
-    var card = document.createElement('div');
-    card.className = 'card';
-    card.style.marginTop = '1rem';
-    card.innerHTML = '<h3>' + h(t('Account', 'الحساب')) + '</h3>'
+    var sec = document.createElement('section');
+    sec.className = 'dash-view';
+    sec.id = 'view-account';
+    sec.dataset.view = 'account';
+    sec.hidden = true;
+    sec.innerHTML = '<h2 class="dash-view-title">' + h(t('Account', 'الحساب')) + '</h2><div class="card">'
       + '<form id="accountPassword"><div class="field"><label>' + h(t('Current password', 'كلمة المرور الحالية')) + ' <input type="password" name="current_password" required autocomplete="current-password"></label></div>'
       + '<div class="field"><label>' + h(t('New password (8+ characters)', 'كلمة المرور الجديدة (8 أحرف فأكثر)')) + ' <input type="password" name="new_password" required minlength="8" autocomplete="new-password"></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Change password', 'تغيير كلمة المرور')) + '</button>'
-      + '<p id="accountPasswordOk" class="muted" hidden style="margin-top:.5rem"></p></form>';
-    content.appendChild(card);
-    var form = card.querySelector('#accountPassword');
+      + '<p id="accountPasswordOk" class="muted" hidden style="margin-top:.5rem"></p></form></div>';
+    content.appendChild(sec);
+    var form = sec.querySelector('#accountPassword');
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      var okMsg = card.querySelector('#accountPasswordOk');
+      var okMsg = sec.querySelector('#accountPasswordOk');
       try {
         await api.req('/api/profile/password', { method: 'POST', body: { current_password: form.elements.current_password.value, new_password: form.elements.new_password.value } });
         form.reset();
@@ -83,7 +125,8 @@
 
   async function boot() {
     if (!api || !api.base()) {
-      content.innerHTML = heading({ full_name: '' }, t('Demo mode — connect the API to use the dashboards.', 'وضع تجريبي — اربط الـ API لاستخدام لوحات التحكم.'));
+      content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading({ full_name: '' }, t('Demo mode — connect the API to use the dashboards.', 'وضع تجريبي — اربط الـ API لاستخدام لوحات التحكم.')));
+      showView(false);
       return;
     }
     if (!localStorage.getItem('bbc-token')) { location.replace('login.html'); return; }
@@ -94,11 +137,11 @@
       location.replace('login.html'); return;
     }
     if (me.role !== role) { location.replace(dashFor(me.role)); return; }
-    logoutLink();
     if (role === 'student') await renderStudent(me);
     else if (role === 'teacher') await renderTeacher(me);
     else await renderAdmin(me);
     accountCard();
+    showView(!!location.hash);
     ready = true;
   }
 
@@ -114,17 +157,17 @@
     var present = att.filter(function (a) { return a.status === 'present'; }).length;
     var graded = asg.filter(function (a) { return a.submission && a.submission.grade != null; }).length;
     var openAsg = asg.filter(function (a) { return !a.submission; });
-    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.')))
+    content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.'))
       + overview('My courses', 'دوراتي', enr.length, 'enrolments', 'تسجيل')
       + overview('My level', 'مستواي', latest ? latest.recommended_level : '—', latest ? 'placement result' : 'not taken yet', latest ? 'نتيجة اختبار المستوى' : 'لم تُجرَ بعد')
       + overview('Attendance', 'الحضور', present + ' / ' + att.length, 'lessons attended', 'حصة حضرتها')
-      + '</div><div class="grid grid2" style="margin-top:1rem">'
-      + '<div class="card"><h3>' + h(t('My enrolments', 'تسجيلاتي')) + '</h3>'
+      + '<p class="muted" style="margin-top:1rem">' + h(t('Grades: ', 'الدرجات: ') + graded + ' / ' + asg.length) + '</p>')
+      + view('enrolments', 'My enrolments', 'تسجيلاتي', '<div class="card">'
       + table([t('Course', 'الدورة'), t('Status', 'الحالة')], enr.map(function (e) {
         var c = cmap[e.course_id];
         return '<tr><td>' + h(c ? (lang === 'ar' ? c.title_ar || c.title_en : c.title_en) : e.course_id) + '</td><td>' + h(e.status) + '</td></tr>';
-      }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>'
-      + '<div class="card"><h3>' + h(t('Homework', 'الواجبات')) + '</h3>'
+      }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>')
+      + view('homework', 'Homework', 'الواجبات', '<div class="card">'
       + table([t('Task', 'المهمة'), t('Course', 'الدورة'), t('Status', 'الحالة')], asg.map(function (a) {
         var c = cmap[a.course_id];
         var status = a.submission ? (a.submission.grade != null ? a.submission.grade + ' / 100' : t('Submitted', 'تم التسليم')) : t('Not submitted', 'لم يُسلَّم');
@@ -134,19 +177,17 @@
         ? '<form id="studentSubmit" style="margin-top:1rem"><div class="field"><label>' + h(t('Assignment', 'الواجب')) + ' <select name="assignment_id">' + openAsg.map(function (a) { return '<option value="' + h(a.id) + '">' + h(a.title) + '</option>'; }).join('') + '</select></label></div>'
           + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea name="content_text" rows="3" required></textarea></label></div>'
           + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button></form>'
-        : '') + '</div>'
-      + '</div><div class="grid grid2" style="margin-top:1rem">'
-      + '<div class="card"><h3>' + h(t('Lessons', 'الدروس')) + '</h3>'
+        : '') + '</div>')
+      + view('lessons', 'Lessons', 'الدروس', '<div class="card">'
       + table([t('Lesson', 'الدرس'), t('Course', 'الدورة'), ''], lessons.map(function (l) {
         var c = cmap[l.course_id];
         var join = l.live_class_url ? '<a class="btn small" href="' + h(l.live_class_url) + '" target="_blank" rel="noopener">' + h(t('Join', 'انضم')) + '</a>' : '';
         return '<tr><td>' + h(l.title_en) + '</td><td>' + h(c ? c.title_en : '') + '</td><td>' + join + '</td></tr>';
-      }), t('No lessons yet.', 'لا توجد دروس بعد.')) + '</div>'
-      + '<div class="card"><h3>' + h(t('Announcements', 'الإعلانات')) + '</h3>'
+      }), t('No lessons yet.', 'لا توجد دروس بعد.')) + '</div>')
+      + view('announcements', 'Announcements', 'الإعلانات', '<div class="card">'
       + (ann.length ? ann.slice(0, 5).map(function (a) {
         return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body).replace(/\n/g, '<br>') + '</span></p>';
-      }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div></div>'
-      + '<p class="muted" style="margin-top:1rem">' + h(t('Grades: ', 'الدرجات: ') + graded + ' / ' + asg.length) + '</p>';
+      }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div>');
 
     var submitForm = document.getElementById('studentSubmit');
     if (submitForm) submitForm.addEventListener('submit', async function (e) {
@@ -178,47 +219,47 @@
         return '<option value="' + h(e.student_id) + '">' + h(e.student_name || e.student_id) + '</option>';
       }).join('');
     };
-    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Your classes, students and tasks for today.', 'حصصك وطلابك ومهام اليوم.')))
+    var noCourseNote = '<div class="card"><p class="muted">' + h(t('An admin must assign you a course before you can add lessons or assignments.', 'يجب أن يسند إليك المسؤول دورة قبل أن تضيف دروسًا أو واجبات.')) + '</p></div>';
+    content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Your classes, students and tasks for today.', 'حصصك وطلابك ومهام اليوم.'))
       + overview('My courses', 'دوراتي', courses.length, '', '')
       + overview('Students', 'الطلاب', Object.keys(students).length, 'across your courses', 'في دوراتك')
-      + overview('To grade', 'بانتظار التصحيح', ungraded, 'submissions', 'تسليم') + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('My classes', 'حصصي')) + '</h3>'
+      + overview('To grade', 'بانتظار التصحيح', ungraded, 'submissions', 'تسليم'))
+      + view('classes', 'My classes', 'حصصي', '<div class="card">'
       + table([t('Class', 'الحصة'), t('Students', 'الطلاب')], courses.map(function (c) {
         return '<tr><td>' + h(c.title_en) + '</td><td>' + enr.filter(function (e) { return e.course_id === c.id; }).length + '</td></tr>';
-      }), t('No courses assigned yet.', 'لا توجد دورات مسندة بعد.')) + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Submissions to grade', 'تسليمات للتصحيح')) + '</h3>'
+      }), t('No courses assigned yet.', 'لا توجد دورات مسندة بعد.')) + '</div>')
+      + view('grading', 'Submissions to grade', 'تسليمات للتصحيح', '<div class="card">'
       + table([t('Student', 'الطالب'), t('Task', 'المهمة'), t('Grade', 'الدرجة'), t('Feedback', 'ملاحظات'), ''], subs.map(function (s) {
         var a = amap[s.assignment_id];
         return '<tr><td>' + h(s.student_name || s.student_id) + '</td><td>' + h(a ? a.title : '') + '</td><td><input type="number" min="0" max="100" style="width:80px" value="' + h(s.grade == null ? '' : s.grade) + '" data-grade="' + h(s.id) + '"></td><td><input data-feedback="' + h(s.id) + '" value="' + h(s.feedback || '') + '"></td><td><button class="btn small" data-grade-btn="' + h(s.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
-      }), t('No submissions yet.', 'لا توجد تسليمات بعد.')) + '</div>'
-      + '<div class="grid grid2" style="margin-top:1rem">'
-      + '<div class="card"><h3>' + h(t('Mark attendance', 'تسجيل الحضور')) + '</h3>'
+      }), t('No submissions yet.', 'لا توجد تسليمات بعد.')) + '</div>')
+      + view('attendance', 'Mark attendance', 'تسجيل الحضور', '<div class="card">'
       + '<form id="teacherAttendance"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
       + '<div class="field"><label>' + h(t('Student', 'الطالب')) + ' <select name="student_id" required>' + studentOpts('') + '</select></label></div>'
       + '<div class="field"><label>' + h(t('Status', 'الحالة')) + ' <select name="status"><option value="present">' + h(t('Present', 'حاضر')) + '</option><option value="absent">' + h(t('Absent', 'غائب')) + '</option><option value="late">' + h(t('Late', 'متأخر')) + '</option><option value="excused">' + h(t('Excused', 'بعذر')) + '</option></select></label></div>'
       + '<div class="field"><label>' + h(t('Date', 'التاريخ')) + ' <input type="date" name="attended_on" value="' + new Date().toLocaleDateString('en-CA') + '"></label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Save attendance', 'حفظ الحضور')) + '</button></form></div>'
-      + '<div class="card"><h3>' + h(t('Post an announcement', 'نشر إعلان')) + '</h3>'
+      + '<button class="btn small" type="submit">' + h(t('Save attendance', 'حفظ الحضور')) + '</button></form></div>')
+      + view('announcements', 'Announcements', 'الإعلانات', '<div class="card">'
       + '<form id="teacherAnnouncement"><div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required></label></div>'
       + '<div class="field"><label>' + h(t('Body', 'النص')) + ' <textarea name="body" rows="3" required></textarea></label></div>'
       + '<div class="field"><label>' + h(t('Audience', 'الجمهور')) + ' <select name="audience"><option value="all">' + h(t('Everyone', 'الجميع')) + '</option><option value="students">' + h(t('Students', 'الطلاب')) + '</option></select></label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Publish', 'نشر')) + '</button></form></div></div>'
-      + (courses.length
-        ? '<div class="grid grid2" style="margin-top:1rem"><div class="card"><h3>' + h(t('New assignment', 'واجب جديد')) + '</h3>'
-      + '<form id="teacherAssignment"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
-      + '<div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required maxlength="300"></label></div>'
-      + '<div class="field"><label>' + h(t('Description', 'الوصف')) + ' <textarea name="description" rows="2"></textarea></label></div>'
-      + '<div class="field"><label>' + h(t('Due date', 'تاريخ التسليم')) + ' <input type="date" name="due_date"></label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Create assignment', 'إنشاء الواجب')) + '</button></form></div>'
-      + '<div class="card"><h3>' + h(t('New lesson', 'درس جديد')) + '</h3>'
-      + '<form id="teacherLesson"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
-      + '<div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required maxlength="200"></label></div>'
-      + '<div class="field"><label>' + h(t('Live class link', 'رابط الحصة المباشرة')) + ' <input name="live_class_url" type="url" dir="ltr" placeholder="https://meet.google.com/..."></label></div>'
-      + '<div class="field"><label>' + h(t('Lesson number', 'رقم الدرس')) + ' <input type="number" name="order_no" min="1" value="1"></label></div>'
-      + '<button class="btn small" type="submit">' + h(t('Add lesson', 'إضافة الدرس')) + '</button></form></div></div>'
-        : '<div class="card" style="margin-top:1rem"><h3>' + h(t('Add coursework', 'إضافة واجبات ودروس')) + '</h3><p class="muted">' + h(t('An admin must assign you a course before you can add lessons or assignments.', 'يجب أن يسند إليك المسؤول دورة قبل أن تضيف دروسًا أو واجبات.')) + '</p></div>')
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Announcements', 'الإعلانات')) + '</h3>'
-      + (ann.length ? ann.slice(0, 5).map(function (a) { return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body) + '</span></p>'; }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div>';
+      + '<button class="btn small" type="submit">' + h(t('Publish', 'نشر')) + '</button></form></div>'
+      + '<div class="card" style="margin-top:1rem">'
+      + (ann.length ? ann.slice(0, 5).map(function (a) { return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body) + '</span></p>'; }).join('') : '<p class="muted">' + h(t('No announcements yet.', 'لا توجد إعلانات بعد.')) + '</p>') + '</div>')
+      + view('assignments', 'New assignment', 'واجب جديد', courses.length
+        ? '<div class="card"><form id="teacherAssignment"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
+          + '<div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required maxlength="300"></label></div>'
+          + '<div class="field"><label>' + h(t('Description', 'الوصف')) + ' <textarea name="description" rows="2"></textarea></label></div>'
+          + '<div class="field"><label>' + h(t('Due date', 'تاريخ التسليم')) + ' <input type="date" name="due_date"></label></div>'
+          + '<button class="btn small" type="submit">' + h(t('Create assignment', 'إنشاء الواجب')) + '</button></form></div>'
+        : noCourseNote)
+      + view('lessons', 'New lesson', 'درس جديد', courses.length
+        ? '<div class="card"><form id="teacherLesson"><div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id" required>' + courseOpts + '</select></label></div>'
+          + '<div class="field"><label>' + h(t('Title', 'العنوان')) + ' <input name="title" required maxlength="200"></label></div>'
+          + '<div class="field"><label>' + h(t('Live class link', 'رابط الحصة المباشرة')) + ' <input name="live_class_url" type="url" dir="ltr" placeholder="https://meet.google.com/..."></label></div>'
+          + '<div class="field"><label>' + h(t('Lesson number', 'رقم الدرس')) + ' <input type="number" name="order_no" min="1" value="1"></label></div>'
+          + '<button class="btn small" type="submit">' + h(t('Add lesson', 'إضافة الدرس')) + '</button></form></div>'
+        : noCourseNote);
 
     content.querySelectorAll('[data-grade-btn]').forEach(function (b) {
       b.addEventListener('click', async function () {
@@ -286,11 +327,11 @@
     var students = users.filter(function (u) { return u.role === 'student'; });
     var pending = bookings.filter(function (b) { return b.status === 'pending'; });
     var courseOpts = courses.map(function (c) { return '<option value="' + h(c.id) + '" data-en="' + h(c.title_en) + '">' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</option>'; }).join('');
-    content.innerHTML = section('Overview', 'نظرة عامة', heading(me, t('Students, courses and bookings at a glance.', 'الطلاب والدورات والحجوزات في لمحة.')))
+    content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Students, courses and bookings at a glance.', 'الطلاب والدورات والحجوزات في لمحة.'))
       + overview('Students', 'الطلاب', students.length, '', '')
       + overview('Courses', 'الدورات', courses.length, '', '')
-      + overview('Pending bookings', 'حجوزات معلّقة', pending.length, '', '') + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Booking requests', 'طلبات الحجز')) + '</h3>'
+      + overview('Pending bookings', 'حجوزات معلّقة', pending.length, '', ''))
+      + view('bookings', 'Booking requests', 'طلبات الحجز', '<div class="card">'
       + table([t('Name', 'الاسم'), t('Contact', 'التواصل'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], bookings.map(function (b) {
         var actions = b.status === 'pending'
           ? '<button class="btn small" data-confirm="' + h(b.id) + '">' + h(t('Confirm', 'تأكيد')) + '</button> <button class="btn small outline" data-reject="' + h(b.id) + '">' + h(t('Reject', 'رفض')) + '</button>'
@@ -298,36 +339,36 @@
         actions += ' <button class="btn small outline" data-create="' + h(b.id) + '">' + h(t('Create account', 'إنشاء حساب')) + '</button>';
         var contact = [b.email, b.phone].filter(Boolean).join(' · ');
         return '<tr><td>' + h(b.full_name) + '</td><td>' + h(contact) + '</td><td>' + h(b.course || '') + '</td><td>' + h(b.status) + '</td><td>' + actions + '</td></tr>';
-      }), t('No booking requests yet.', 'لا توجد طلبات حجز بعد.')) + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Create a student account', 'إنشاء حساب طالب')) + '</h3>'
+      }), t('No booking requests yet.', 'لا توجد طلبات حجز بعد.')) + '</div>')
+      + view('accounts', 'Create a student account', 'إنشاء حساب طالب', '<div class="card">'
       + '<p class="muted">' + h(t('After confirming a booking, create the student account and enrol them in the course.', 'بعد تأكيد الحجز، أنشئ حساب الطالب وسجّله في الدورة.')) + '</p>'
       + '<form id="adminCreateAccountForm"><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required></label></div>'
       + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" required></label></div>'
       + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
       + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('No enrolment', 'بدون تسجيل')) + '</option>' + courseOpts + '</select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create student account', 'إنشاء حساب الطالب')) + '</button></form>'
-      + '<div id="adminCreateAccountOk" class="success" hidden style="margin-top:1rem"></div></div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('People', 'الأشخاص')) + '</h3>'
+      + '<div id="adminCreateAccountOk" class="success" hidden style="margin-top:1rem"></div></div>')
+      + view('people', 'People', 'الأشخاص', '<div class="card">'
       + table([t('Name', 'الاسم'), t('Email', 'البريد'), t('Role', 'الدور'), t('New password', 'كلمة مرور جديدة'), ''], users.map(function (u) {
         return '<tr><td>' + h(u.full_name) + '</td><td>' + h(u.email) + '</td>'
           + '<td><select data-role-for="' + h(u.id) + '">' + ['student', 'teacher', 'admin'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + h(r) + '</option>'; }).join('') + '</select></td>'
           + '<td><input type="password" data-pw-for="' + h(u.id) + '" placeholder="' + h(t('8+ characters', '8 أحرف فأكثر')) + '" style="width:150px"></td>'
           + '<td><button class="btn small" data-save-user="' + h(u.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
-      }), t('No users yet.', 'لا يوجد مستخدمون بعد.')) + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Courses and teachers', 'الدورات والمعلمون')) + '</h3>'
+      }), t('No users yet.', 'لا يوجد مستخدمون بعد.')) + '</div>')
+      + view('courses', 'Courses and teachers', 'الدورات والمعلمون', '<div class="card">'
       + table([t('Course', 'الدورة'), t('Teacher', 'المعلم'), ''], courses.map(function (c) {
         var opts = '<option value="">' + h(t('Unassigned', 'غير مسند')) + '</option>' + users.filter(function (u) { return u.role === 'teacher'; }).map(function (u) {
           return '<option value="' + h(u.id) + '"' + (c.teacher_id === u.id ? ' selected' : '') + '>' + h(u.full_name) + '</option>';
         }).join('');
         return '<tr><td>' + h(c.title_en) + '</td><td><select data-teacher-for="' + h(c.id) + '">' + opts + '</select></td>'
           + '<td><button class="btn small" data-save-course="' + h(c.id) + '">' + h(t('Save', 'حفظ')) + '</button></td></tr>';
-      }), t('No courses yet.', 'لا توجد دورات بعد.')) + '</div>'
-      + '<div class="card" style="margin-top:1rem"><h3>' + h(t('Recent enrolments', 'أحدث التسجيلات')) + '</h3>'
+      }), t('No courses yet.', 'لا توجد دورات بعد.')) + '</div>')
+      + view('enrolments', 'Recent enrolments', 'أحدث التسجيلات', '<div class="card">'
       + table([t('Student', 'الطالب'), t('Course', 'الدورة'), t('Status', 'الحالة'), ''], enr.slice(0, 20).map(function (e) {
         var c = cmap[e.course_id];
         var approve = e.status === 'pending' ? '<button class="btn small" data-approve="' + h(e.id) + '">' + h(t('Approve', 'موافقة')) + '</button>' : '';
         return '<tr><td>' + h(e.student_name || e.student_id) + '</td><td>' + h(c ? c.title_en : e.course_id) + '</td><td>' + h(e.status) + '</td><td>' + approve + '</td></tr>';
-      }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>';
+      }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>');
 
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
       b.addEventListener('click', async function () {
@@ -358,8 +399,13 @@
           var match = Array.prototype.find.call(form.elements.course_id.options, function (o) { return (o.dataset.en || o.text) === booking.course; });
           if (match) form.elements.course_id.value = match.value;
         }
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        form.elements.password.focus();
+        // The form lives in the Accounts view: switch to it first, then
+        // scroll/focus once it is visible (hash is preserved on reload).
+        location.hash = '#accounts';
+        setTimeout(function () {
+          form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          form.elements.password.focus();
+        }, 0);
       });
     });
     content.querySelectorAll('[data-save-course]').forEach(function (b) {
@@ -391,8 +437,10 @@
           await api.req('/api/admin/enrolments', { method: 'POST', body: { student_id: created.user.id, course_id: form.elements.course_id.value, status: 'active' } });
         }
         // Reload so the People / enrolments tables include the new student;
-        // the confirmation is carried across the reload in sessionStorage.
+        // the confirmation is carried across the reload in sessionStorage, and
+        // the hash keeps the Accounts view (with the confirmation) visible.
         sessionStorage.setItem('bbc-flash', t('Account created for ', 'تم إنشاء حساب ') + created.user.email + ' ✔');
+        location.hash = '#accounts';
         location.reload();
       } catch (err) { alert((lang === 'ar' ? 'فشل إنشاء الحساب: ' : 'Account creation failed: ') + err.message); }
     });
