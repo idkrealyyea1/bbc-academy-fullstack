@@ -171,6 +171,14 @@ app.post('/api/courses', auth, roles('admin', 'teacher'), wrap(async (req, res) 
   if (!reqStr(b, 'slug', 100) || !reqStr(b, 'title_en', 200)) return bad(res, 400, 'slug and title_en required');
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(b.slug.trim())) return bad(res, 400, 'slug must be lowercase letters, digits and hyphens only');
   if ((await store.listCourses()).some(c => c.slug === b.slug.trim())) return bad(res, 409, 'Slug already exists');
+  // Mirror the PUT /api/courses/:id rule: an admin assigning a course must
+  // name a real teacher, not a student, a missing id, or an admin. (A
+  // teacher creating a course is forced to themselves below, so this check
+  // is admin-only and cannot be used to take over another teacher's course.)
+  if (req.user.role === 'admin' && b.teacher_id) {
+    const t = await store.getUser(b.teacher_id);
+    if (!t || t.role !== 'teacher') return bad(res, 400, 'teacher_id must be an existing teacher');
+  }
   const c = await store.createCourse({
     slug: b.slug.trim(), level_id: b.level_id || null, title_en: b.title_en.trim(), title_ar: b.title_ar || null,
     description_en: b.description_en || null, description_ar: b.description_ar || null, duration_weeks: b.duration_weeks || null,
@@ -347,6 +355,16 @@ app.post('/api/attendance', auth, roles('admin', 'teacher'), wrap(async (req, re
   if (!canManageCourse(req.user, course)) return bad(res, 403, 'You can only mark attendance for your own courses');
   const student = await store.getUser(req.body.student_id);
   if (!student || student.role !== 'student') return bad(res, 404, 'Student not found');
+  // Attendance is only for current class members. 'active' is the sole status
+  // that means "currently enrolled": 'pending' has not been approved by the
+  // academy yet, 'completed' means the course is finished, and 'cancelled'
+  // means withdrawn. No schema change: status already exists on enrolments
+  // (001_init.sql enrolment_status enum), and this check applies to admins
+  // as well as teachers — an admin marking a non-member present would be
+  // just as wrong a record. Ownership is checked before this, so a teacher
+  // marking another teacher's course still gets 403 above, not here.
+  const enrolment = await store.getEnrolment(student.id, course.id);
+  if (!enrolment || enrolment.status !== 'active') return bad(res, 403, 'Student is not actively enrolled in this course');
   const attendedOn = req.body.attended_on || todayInAcademyTz();
   if (!isDate(attendedOn)) return bad(res, 400, 'attended_on must be YYYY-MM-DD');
   return ok(res, { attendance: await store.createAttendance({ course_id: course.id, student_id: student.id, lesson_id: req.body.lesson_id || null, status: req.body.status || 'present', attended_on: attendedOn }) }, 201);

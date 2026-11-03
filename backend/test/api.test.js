@@ -160,6 +160,9 @@ test('attendance without a date is stamped in the academy time zone', async () =
   const teacher = await makeUser('teacher', 'att@test.local');
   const student = await makeUser('student', 'att-student@test.local');
   const course = await store.createCourse({ slug: 'att-course', title_en: 'Attendance', is_published: true, teacher_id: teacher.id });
+  // Attendance now requires an active enrolment (see the regression test
+  // below); without this line this test's 201 would be a 403.
+  await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'active' });
   const token = await login(teacher.email);
   const res = await call('/api/attendance', { method: 'POST', token, body: { course_id: course.id, student_id: student.id, status: 'present' } });
   assert.equal(res.status, 201);
@@ -168,6 +171,57 @@ test('attendance without a date is stamped in the academy time zone', async () =
   assert.equal(res.data.attendance.attended_on, expected);
   const bad = await call('/api/attendance', { method: 'POST', token, body: { course_id: course.id, student_id: student.id, attended_on: '03/11/2026' } });
   assert.equal(bad.status, 400);
+});
+
+test('attendance requires an active enrolment, and another teacher is still blocked', async () => {
+  const teacher = await makeUser('teacher', 'att2-teacher@test.local');
+  const otherTeacher = await makeUser('teacher', 'att2-other@test.local');
+  const admin = await makeUser('admin', 'att2-admin@test.local');
+  const enrolled = await makeUser('student', 'att2-enrolled@test.local');
+  const pending = await makeUser('student', 'att2-pending@test.local');
+  const never = await makeUser('student', 'att2-never@test.local');
+  const completed = await makeUser('student', 'att2-completed@test.local');
+  const cancelled = await makeUser('student', 'att2-cancelled@test.local');
+  const course = await store.createCourse({ slug: 'att2-course', title_en: 'Attendance 2', is_published: true, teacher_id: teacher.id });
+  await store.createEnrolment({ student_id: enrolled.id, course_id: course.id, status: 'active' });
+  await store.createEnrolment({ student_id: pending.id, course_id: course.id, status: 'pending' });
+  await store.createEnrolment({ student_id: completed.id, course_id: course.id, status: 'completed' });
+  await store.createEnrolment({ student_id: cancelled.id, course_id: course.id, status: 'cancelled' });
+  const token = await login(teacher.email);
+  const otherToken = await login(otherTeacher.email);
+  const adminToken = await login(admin.email);
+  const mark = (tok, studentId, status) => call('/api/attendance', { method: 'POST', token: tok, body: { course_id: course.id, student_id: studentId, status } });
+
+  // (a) Non-enrolled cannot be marked — present or absent, and no
+  // non-active status counts: pending (not yet approved), completed
+  // (course finished) and cancelled (withdrawn) are all rejected.
+  assert.equal((await mark(token, never.id, 'present')).status, 403);
+  assert.equal((await mark(token, never.id, 'absent')).status, 403);
+  assert.equal((await mark(token, pending.id, 'absent')).status, 403);
+  assert.equal((await mark(token, completed.id, 'present')).status, 403);
+  assert.equal((await mark(token, cancelled.id, 'present')).status, 403);
+  // The rule binds admins too, not just teachers.
+  assert.equal((await mark(adminToken, never.id, 'present')).status, 403);
+
+  // (b) A teacher still cannot mark attendance for another teacher's course,
+  // even for a student who IS actively enrolled in it.
+  assert.equal((await mark(otherToken, enrolled.id, 'present')).status, 403);
+
+  // (c) An actively enrolled student CAN still be marked, by the owning
+  // teacher and by an admin.
+  assert.equal((await mark(token, enrolled.id, 'present')).status, 201);
+  assert.equal((await mark(adminToken, enrolled.id, 'absent')).status, 201);
+});
+
+test('an admin assigning a course on creation must name an existing teacher', async () => {
+  const admin = await makeUser('admin', 'assign-admin@test.local');
+  const teacher = await makeUser('teacher', 'assign-teacher@test.local');
+  const student = await makeUser('student', 'assign-student@test.local');
+  const token = await login(admin.email);
+  const create = (teacherId) => call('/api/courses', { method: 'POST', token, body: { slug: 'assign-course-' + String(teacherId).slice(0, 8), title_en: 'Assign', teacher_id: teacherId } });
+  assert.equal((await create('not-a-user')).status, 400);
+  assert.equal((await create(student.id)).status, 400);
+  assert.equal((await create(teacher.id)).status, 201);
 });
 
 test('only an admin can move a course to another teacher', async () => {

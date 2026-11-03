@@ -61,6 +61,7 @@ class MemoryStore {
   }
   async createLesson(l) { const r = { id: uid(), created_at: now(), ...l }; this.lessons.push(r); return r; }
   async isEnrolled(studentId, courseId) { return this.enrolments.some(e => e.student_id === studentId && e.course_id === courseId); }
+  async getEnrolment(studentId, courseId) { return this.enrolments.find(e => e.student_id === studentId && e.course_id === courseId) || null; }
   async createEnrolment(e) {
     if (this.enrolments.some(x => x.student_id === e.student_id && x.course_id === e.course_id)) {
       const err = new Error('Already enrolled'); err.code = '23505'; throw err;
@@ -170,6 +171,7 @@ class PgStore {
   async listLessonsForTeacher(teacherId) { return this.q('SELECT l.* FROM lessons l JOIN courses c ON c.id=l.course_id WHERE c.teacher_id=$1 ORDER BY l.order_no', [teacherId]); }
   async createLesson(l) { return (await this.q('INSERT INTO lessons (course_id,title_en,title_ar,content_url,material_url,live_class_url,order_no) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [l.course_id, l.title_en, l.title_ar || null, l.content_url || null, l.material_url || null, l.live_class_url || null, l.order_no || 1]))[0]; }
   async isEnrolled(studentId, courseId) { return (await this.q('SELECT 1 FROM enrolments WHERE student_id=$1 AND course_id=$2 LIMIT 1', [studentId, courseId])).length > 0; }
+  async getEnrolment(studentId, courseId) { return (await this.q('SELECT * FROM enrolments WHERE student_id=$1 AND course_id=$2', [studentId, courseId]))[0] || null; }
   async createEnrolment(e) { return (await this.q('INSERT INTO enrolments (student_id,course_id,status) VALUES ($1,$2,$3) RETURNING *', [e.student_id, e.course_id, e.status || 'pending']))[0]; }
   async listEnrolmentsForUser(u) { return this.q('SELECT e.*, p.full_name AS student_name FROM enrolments e LEFT JOIN profiles p ON p.id=e.student_id WHERE e.student_id=$1 ORDER BY e.created_at DESC', [u]); }
   async updateEnrolment(id, status) { return (await this.q('UPDATE enrolments SET status=$2 WHERE id=$1 RETURNING *', [id, status]))[0] || null; }
