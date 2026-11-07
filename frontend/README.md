@@ -1,7 +1,8 @@
 # Frontend — BBC English Academy (static build for Cloudflare Pages)
 
 Vanilla HTML/CSS/JS, no framework, no build step required for local use.
-No heavy images, no 3D, system fonts only — designed for low-bandwidth users.
+Self-hosted subset fonts, compressed local photography and no UI libraries —
+designed to stay quick on modest connections.
 
 ## Run locally (demo mode)
 
@@ -12,7 +13,7 @@ python3 -m http.server 8000
 ```
 
 Demo mode is the default: `config.js` has an empty API base, so pages render
-demo data and show a yellow **DEMO MODE** banner. Nothing is really booked,
+the demo catalogue and label demo forms inline. Nothing is really booked,
 paid or saved in demo mode.
 
 ## Run locally (connected to the real backend)
@@ -22,7 +23,7 @@ cd ../backend && npm install && npm start   # API on http://localhost:4000
 cd ../frontend
 API_BASE_URL=http://localhost:4000 node build.js
 python3 -m http.server 8000
-# open http://localhost:8000/ — the banner disappears once the API answers
+# open http://localhost:8000/ — the real catalogue and forms are used once the API answers
 ```
 
 Or, without rebuilding: in the browser console / address bar flow, set
@@ -37,7 +38,7 @@ the `API_BASE_URL` environment variable to the Render API URL.
 
 ## Pages
 
-index, courses (grouped by section, with add-a-course form), course (detail via `?id=<slug>`),
+index, courses, course (detail via `?id=<slug>`),
 levels (placement quiz), about, teachers, booking, blog, faq, contact,
 login, dashboard-student, dashboard-teacher, dashboard-admin.
 
@@ -46,27 +47,26 @@ their account after confirmation; dashboards are reached only via login.
 Language toggle (top right) switches EN/AR and RTL/LTR and persists in
 `localStorage` (`bbc-lang`). Auth token in `localStorage` (`bbc-token`).
 
-## Design — shared with the frontend-only demo (2026-11-02 redesign)
+## Design system (2026-11 redesign)
 
-This frontend is the new design, identical to the frontend-only demo: cream/navy/red system
-(`new-home.css` on the main page, `unified.css` + main-page header/footer on the other pages),
-BBC B-B-C mark, luxury black/red login page, page transition between pages, and the desktop
-English hero fix.
-Client-facing pages carry no visible TODO / demo text; the full honesty
-list (unverified hero stats, teachers by specialism only, "Fees on
-enquiry", no address/phone invented, BBC-affiliation disclaimer, classroom
-photo is generic) is in the frontend-only README and in code comments.
-When no backend is connected, pages fall back to catalogue data and show
-no on-page banner (fallback behaviour is documented here and in `app.js`
-comments, not splashed across the client site).
+One coherent dark editorial system, with no page-specific override stacks:
 
-## Homepage (new reference, index.html only)
-Same homepage as the frontend-only demo: navy top bar with centred BBC logo, full-bleed photo hero (`hero-home.jpg`), stacked CTAs, 3-feature card and 3-stat card. Other pages keep the dark/red identity.
-**Homepage stats (+10,000 students, 95% success rate, 5.0 student rating) are design placeholders from the reference screenshot — NOT verified facts. Owner must confirm/correct before public launch.**
+- `system.css` — tokens, typography, layout primitives and shared components
+  (buttons, fields, cards, tables, accordion, alerts, navigation, footer, states).
+- `public.css` — public-page compositions only (hero, paths, method, story,
+  catalogue, course detail, levels/quiz, FAQ, journal, booking, contact, auth).
+- `dashboard.css` — the student / teacher / admin application shell.
 
-## Homepage placeholders (owner must replace before public launch)
-- Hero stats (+10,000 / 95% / 5.0) are the figures from the reference screenshot
-  and are NOT verified academy figures — the owner must confirm or correct them.
+Palette: obsidian and graphite surfaces, crimson `#A82030`, burgundy depth,
+ivory text and restrained champagne accents. Type: Manrope (UI), Playfair
+Display (editorial display, Latin only) and IBM Plex Sans Arabic (Arabic,
+with logical-property RTL throughout). Both languages are first-class.
+
+Demo and illustrative material is labelled in the UI. Course data, levels and
+accounts come from the API when one is configured. No pricing, schedules,
+addresses, teacher profiles, statistics or testimonials are invented; the
+photography is illustrative and marked where it could imply real staff or
+students. A failed API request never becomes a success message.
 - Teacher photos on the homepage are illustrative AI-generated placeholders
   (specialism only, no invented names or bios). Replace them with real staff
   photos, with each teacher's consent, before launch.
