@@ -13,10 +13,10 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="assets/fonts/plex-ar-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="system.css"><link rel="stylesheet" href="public.css">
+<link rel="stylesheet" href="system.css"><link rel="stylesheet" href="public.css"><link rel="stylesheet" href="page-transition.css">
 <script>try{var l=localStorage.getItem('bbc-lang')||'ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}</script>
 </head>
-<body>
+<body><div class="page-transition" id="pageTransition" aria-hidden="true"><div class="pt-panel pt-left"></div><div class="pt-panel pt-right"></div><div class="pt-content"><div class="pt-mark"><b>B</b><b>B</b><b>C</b></div><div class="pt-word">ACADEMY</div><div class="pt-line"></div><div class="pt-tag">English, with confidence</div></div></div>
 <a class="skip-link" href="#main" data-en="Skip to content" data-ar="تخطَّ إلى المحتوى">تخطَّ إلى المحتوى</a>
 <header class="topbar">
   <div class="wrap nav-inner">
@@ -158,5 +158,5 @@
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="app.js"></script>
-</body>
+<script src="page-transition.js"></script></body>
 </html>
