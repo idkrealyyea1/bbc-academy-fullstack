@@ -642,6 +642,7 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
   }
   html[dir="rtl"] .dash-sidebar { transform: translateX(102%); }
   .dash-sidebar.open { transform: translateX(0); }
+  html[dir="rtl"] .dash-sidebar.open { transform: translateX(0); }
   .dash-drawer-head {
     display: flex;
     align-items: center;
