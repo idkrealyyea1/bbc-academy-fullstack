@@ -1,0 +1,499 @@
+{
+  "communities": {
+    "0": [
+      "backend_src_db_memorystore",
+      "backend_src_db_memorystore_constructor",
+      "backend_src_db_memorystore_createannouncement",
+      "backend_src_db_memorystore_createassignment",
+      "backend_src_db_memorystore_createattendance",
+      "backend_src_db_memorystore_createbookingrequest",
+      "backend_src_db_memorystore_createcourse",
+      "backend_src_db_memorystore_createenrolment",
+      "backend_src_db_memorystore_createlesson",
+      "backend_src_db_memorystore_createpayment",
+      "backend_src_db_memorystore_createplacement",
+      "backend_src_db_memorystore_createsubmission",
+      "backend_src_db_memorystore_createuser",
+      "backend_src_db_memorystore_deletebookingrequest",
+      "backend_src_db_memorystore_deletecourse",
+      "backend_src_db_memorystore_deleteenrolment",
+      "backend_src_db_memorystore_deleteuser",
+      "backend_src_db_memorystore_finduserbyemail",
+      "backend_src_db_memorystore_finduserbyusername",
+      "backend_src_db_memorystore_getassignment",
+      "backend_src_db_memorystore_getcourse",
+      "backend_src_db_memorystore_getenrolment",
+      "backend_src_db_memorystore_getsubmission",
+      "backend_src_db_memorystore_getuser",
+      "backend_src_db_memorystore_gradesubmission",
+      "backend_src_db_memorystore_isenrolled",
+      "backend_src_db_memorystore_listannouncements",
+      "backend_src_db_memorystore_listassignments",
+      "backend_src_db_memorystore_listassignmentsforstudent",
+      "backend_src_db_memorystore_listassignmentsforteacher",
+      "backend_src_db_memorystore_listattendance",
+      "backend_src_db_memorystore_listattendanceforuser",
+      "backend_src_db_memorystore_listbookingrequests",
+      "backend_src_db_memorystore_listcourses",
+      "backend_src_db_memorystore_listenrolmentsall",
+      "backend_src_db_memorystore_listenrolmentsforuser",
+      "backend_src_db_memorystore_listlessons",
+      "backend_src_db_memorystore_listlessonsforstudent",
+      "backend_src_db_memorystore_listlessonsforteacher",
+      "backend_src_db_memorystore_listlevels",
+      "backend_src_db_memorystore_listpaymentsall",
+      "backend_src_db_memorystore_listpaymentsforuser",
+      "backend_src_db_memorystore_listplacementsforuser",
+      "backend_src_db_memorystore_listsubmissions",
+      "backend_src_db_memorystore_listusers",
+      "backend_src_db_memorystore_updatebookingrequest",
+      "backend_src_db_memorystore_updatecourse",
+      "backend_src_db_memorystore_updateenrolment",
+      "backend_src_db_memorystore_updateuser",
+      "backend_src_db_now",
+      "backend_src_db_uid"
+    ],
+    "1": [
+      "backend_src_db_pgstore",
+      "backend_src_db_pgstore_constructor",
+      "backend_src_db_pgstore_createannouncement",
+      "backend_src_db_pgstore_createassignment",
+      "backend_src_db_pgstore_createattendance",
+      "backend_src_db_pgstore_createbookingrequest",
+      "backend_src_db_pgstore_createcourse",
+      "backend_src_db_pgstore_createenrolment",
+      "backend_src_db_pgstore_createlesson",
+      "backend_src_db_pgstore_createpayment",
+      "backend_src_db_pgstore_createplacement",
+      "backend_src_db_pgstore_createsubmission",
+      "backend_src_db_pgstore_createuser",
+      "backend_src_db_pgstore_deletecourse",
+      "backend_src_db_pgstore_deleteenrolment",
+      "backend_src_db_pgstore_finduserbyemail",
+      "backend_src_db_pgstore_finduserbyusername",
+      "backend_src_db_pgstore_getassignment",
+      "backend_src_db_pgstore_getcourse",
+      "backend_src_db_pgstore_getenrolment",
+      "backend_src_db_pgstore_getsubmission",
+      "backend_src_db_pgstore_getuser",
+      "backend_src_db_pgstore_gradesubmission",
+      "backend_src_db_pgstore_isenrolled",
+      "backend_src_db_pgstore_listannouncements",
+      "backend_src_db_pgstore_listassignments",
+      "backend_src_db_pgstore_listassignmentsforstudent",
+      "backend_src_db_pgstore_listassignmentsforteacher",
+      "backend_src_db_pgstore_listattendance",
+      "backend_src_db_pgstore_listattendanceforuser",
+      "backend_src_db_pgstore_listbookingrequests",
+      "backend_src_db_pgstore_listcourses",
+      "backend_src_db_pgstore_listenrolmentsall",
+      "backend_src_db_pgstore_listenrolmentsforuser",
+      "backend_src_db_pgstore_listlessons",
+      "backend_src_db_pgstore_listlessonsforstudent",
+      "backend_src_db_pgstore_listlessonsforteacher",
+      "backend_src_db_pgstore_listlevels",
+      "backend_src_db_pgstore_listpaymentsall",
+      "backend_src_db_pgstore_listpaymentsforuser",
+      "backend_src_db_pgstore_listplacementsforuser",
+      "backend_src_db_pgstore_listsubmissions",
+      "backend_src_db_pgstore_listusers",
+      "backend_src_db_pgstore_q",
+      "backend_src_db_pgstore_updatebookingrequest",
+      "backend_src_db_pgstore_updatecourse",
+      "backend_src_db_pgstore_updateenrolment",
+      "backend_src_db_pgstore_updateuser"
+    ],
+    "2": [
+      "db_migrations_001_init",
+      "db_migrations_001_init_announcements",
+      "db_migrations_001_init_assignments",
+      "db_migrations_001_init_attendance",
+      "db_migrations_001_init_courses",
+      "db_migrations_001_init_enrolments",
+      "db_migrations_001_init_grades",
+      "db_migrations_001_init_idx_assignments_course",
+      "db_migrations_001_init_idx_attendance_course",
+      "db_migrations_001_init_idx_courses_level",
+      "db_migrations_001_init_idx_courses_slug",
+      "db_migrations_001_init_idx_enrolments_course",
+      "db_migrations_001_init_idx_enrolments_student",
+      "db_migrations_001_init_idx_lessons_course",
+      "db_migrations_001_init_idx_payments_student",
+      "db_migrations_001_init_idx_placement_student",
+      "db_migrations_001_init_idx_submissions_assignment",
+      "db_migrations_001_init_idx_submissions_student",
+      "db_migrations_001_init_lessons",
+      "db_migrations_001_init_levels",
+      "db_migrations_001_init_payments",
+      "db_migrations_001_init_placement_results",
+      "db_migrations_001_init_placement_tests",
+      "db_migrations_001_init_profiles",
+      "db_migrations_001_init_roles",
+      "db_migrations_001_init_submissions",
+      "db_migrations_005_usernames",
+      "db_migrations_005_usernames_profiles_username_unique",
+      "db_migrations_007_submissions_unique",
+      "db_migrations_007_submissions_unique_submissions_assignment_student_unique"
+    ],
+    "3": [
+      "backend_src_server",
+      "backend_src_server_auth",
+      "backend_src_server_bad",
+      "backend_src_server_bcrypt",
+      "backend_src_server_canmanagecourse",
+      "backend_src_server_canreadcourse",
+      "backend_src_server_cors",
+      "backend_src_server_express",
+      "backend_src_server_isdate",
+      "backend_src_server_isemail",
+      "backend_src_server_jwt",
+      "backend_src_server_levelfor",
+      "backend_src_server_normaliseusername",
+      "backend_src_server_ok",
+      "backend_src_server_optionalauth",
+      "backend_src_server_origins",
+      "backend_src_server_pick",
+      "backend_src_server_placement_answers",
+      "backend_src_server_publicuser",
+      "backend_src_server_ratelimit",
+      "backend_src_server_registerlimiter",
+      "backend_src_server_reqstr",
+      "backend_src_server_roles",
+      "backend_src_server_sign",
+      "backend_src_server_todayinacademytz",
+      "backend_src_server_wrap"
+    ],
+    "4": [
+      "frontend_dashboard",
+      "frontend_dashboard_accountcard",
+      "frontend_dashboard_badge",
+      "frontend_dashboard_boot",
+      "frontend_dashboard_btn",
+      "frontend_dashboard_card",
+      "frontend_dashboard_confirmdlg",
+      "frontend_dashboard_dashfor",
+      "frontend_dashboard_heading",
+      "frontend_dashboard_labeltablecells",
+      "frontend_dashboard_levelname",
+      "frontend_dashboard_levelnamebycode",
+      "frontend_dashboard_overview",
+      "frontend_dashboard_refreshcurrent",
+      "frontend_dashboard_renderadmin",
+      "frontend_dashboard_renderstudent",
+      "frontend_dashboard_renderteacher",
+      "frontend_dashboard_section",
+      "frontend_dashboard_sectionwithbuttons",
+      "frontend_dashboard_setbusy",
+      "frontend_dashboard_showview",
+      "frontend_dashboard_table",
+      "frontend_dashboard_toast",
+      "frontend_dashboard_view",
+      "frontend_dashboard_wiredashchrome"
+    ],
+    "5": [
+      "frontend_app",
+      "frontend_app_applylanguage",
+      "frontend_app_boot",
+      "frontend_app_emptyfiltermessage",
+      "frontend_app_esc",
+      "frontend_app_getlang",
+      "frontend_app_initdemoforms",
+      "frontend_app_initnavigation",
+      "frontend_app_initnavigation_setopen",
+      "frontend_app_initpasswordtoggles",
+      "frontend_app_levellabel",
+      "frontend_app_quizanswer",
+      "frontend_app_quizlevel",
+      "frontend_app_quizshow",
+      "frontend_app_quizstart",
+      "frontend_app_rendercoursedetail",
+      "frontend_app_rendercourses",
+      "frontend_app_sectionname",
+      "frontend_app_sectionof",
+      "frontend_app_setfilterstate",
+      "frontend_app_tr",
+      "frontend_app_wirefilterbuttons"
+    ],
+    "6": [
+      "backend_package",
+      "backend_package_dependencies",
+      "backend_package_dependencies_bcryptjs",
+      "backend_package_dependencies_cors",
+      "backend_package_dependencies_express",
+      "backend_package_dependencies_express_rate_limit",
+      "backend_package_dependencies_jsonwebtoken",
+      "backend_package_description",
+      "backend_package_engines",
+      "backend_package_engines_node",
+      "backend_package_main",
+      "backend_package_name",
+      "backend_package_private",
+      "backend_package_version",
+      "ref_bcryptjs",
+      "ref_cors",
+      "ref_express",
+      "ref_express_rate_limit",
+      "ref_jsonwebtoken"
+    ],
+    "7": [
+      "render",
+      "render_envvars_key",
+      "render_envvars_sync",
+      "render_envvars_value",
+      "render_services",
+      "render_services_buildcommand",
+      "render_services_env",
+      "render_services_envvars",
+      "render_services_healthcheckpath",
+      "render_services_name",
+      "render_services_plan",
+      "render_services_rootdir",
+      "render_services_startcommand",
+      "render_services_type"
+    ],
+    "8": [
+      "backend_package_dependencies_pg",
+      "backend_src_db",
+      "backend_src_db_createstore",
+      "backend_src_db_crypto",
+      "backend_src_db_demo_courses",
+      "backend_src_db_demo_levels",
+      "backend_src_db_rationale_25",
+      "backend_src_db_seeddemo",
+      "backend_src_seed",
+      "backend_src_seed_bcrypt",
+      "backend_src_server_main",
+      "ref_crypto",
+      "ref_pg"
+    ],
+    "9": [
+      "frontend_api",
+      "frontend_api_base",
+      "frontend_api_clearerror",
+      "frontend_api_empty",
+      "frontend_api_errbox",
+      "frontend_api_esc",
+      "frontend_api_lang",
+      "frontend_api_mountenrol",
+      "frontend_api_req",
+      "frontend_api_setbusy",
+      "frontend_api_showsuccess",
+      "frontend_api_t",
+      "frontend_api_token"
+    ],
+    "10": [
+      "backend_src_server_app",
+      "backend_src_server_store",
+      "backend_test_api_test",
+      "backend_test_api_test_assert",
+      "backend_test_api_test_bcrypt",
+      "backend_test_api_test_call",
+      "backend_test_api_test_login",
+      "backend_test_api_test_makeuser",
+      "backend_test_api_test_test",
+      "ref_node_assert",
+      "ref_node_test"
+    ],
+    "11": [
+      "backend_scripts_pg_smoke",
+      "backend_scripts_pg_smoke_admin",
+      "backend_scripts_pg_smoke_check",
+      "backend_scripts_pg_smoke_checks",
+      "backend_scripts_pg_smoke_failed",
+      "backend_scripts_pg_smoke_require",
+      "backend_scripts_pg_smoke_sandbox",
+      "ref_node_fs",
+      "ref_node_module",
+      "ref_src_db_js"
+    ],
+    "12": [
+      "backend_package_scripts",
+      "backend_package_scripts_dev",
+      "backend_package_scripts_seed",
+      "backend_package_scripts_start",
+      "backend_package_scripts_test"
+    ],
+    "13": [
+      "frontend_build",
+      "frontend_build_base",
+      "frontend_build_fs",
+      "ref_fs"
+    ],
+    "14": [
+      "db_migrations_002_rls",
+      "db_migrations_002_rls_public_current_user_role",
+      "public_profiles"
+    ],
+    "15": [
+      "db_migrations_004_booking_requests",
+      "db_migrations_004_booking_requests_booking_requests"
+    ],
+    "16": [
+      "frontend_page_transition",
+      "frontend_page_transition_opendoors"
+    ],
+    "17": [
+      "db_migrations_003_storage"
+    ],
+    "18": [
+      "db_migrations_005_fixes"
+    ],
+    "19": [
+      "db_migrations_006_levels"
+    ],
+    "20": [
+      "db_supabase_seed"
+    ],
+    "21": [
+      "frontend_config"
+    ]
+  },
+  "cohesion": {
+    "0": 0.058823529411764705,
+    "1": 0.08156028368794327,
+    "2": 0.135632183908046,
+    "3": 0.08307692307692308,
+    "4": 0.23,
+    "5": 0.23809523809523808,
+    "6": 0.13450292397660818,
+    "7": 0.14285714285714285,
+    "8": 0.1794871794871795,
+    "9": 0.3076923076923077,
+    "10": 0.2,
+    "11": 0.2,
+    "12": 0.4,
+    "13": 0.5,
+    "14": 0.6666666666666666,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0,
+    "21": 1.0
+  },
+  "gods": [
+    {
+      "id": "backend_src_db_memorystore",
+      "label": "MemoryStore",
+      "degree": 50
+    },
+    {
+      "id": "backend_src_db_pgstore",
+      "label": "PgStore",
+      "degree": 49
+    },
+    {
+      "id": "backend_src_db_now",
+      "label": "now()",
+      "degree": 14
+    },
+    {
+      "id": "backend_src_db_uid",
+      "label": "uid()",
+      "degree": 13
+    },
+    {
+      "id": "frontend_dashboard_renderadmin",
+      "label": "renderAdmin()",
+      "degree": 13
+    },
+    {
+      "id": "frontend_dashboard_renderstudent",
+      "label": "renderStudent()",
+      "degree": 13
+    },
+    {
+      "id": "frontend_dashboard_renderteacher",
+      "label": "renderTeacher()",
+      "degree": 12
+    },
+    {
+      "id": "frontend_dashboard_boot",
+      "label": "boot()",
+      "degree": 11
+    },
+    {
+      "id": "db_migrations_001_init_profiles",
+      "label": "profiles",
+      "degree": 11
+    },
+    {
+      "id": "frontend_app_boot",
+      "label": "boot()",
+      "degree": 10
+    }
+  ],
+  "surprises": [
+    {
+      "source": "profiles_username_unique",
+      "target": "profiles",
+      "source_files": [
+        "db/migrations/005_usernames.sql",
+        "db/migrations/001_init.sql"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "indexes",
+      "why": "peripheral node `profiles_username_unique` unexpectedly reaches hub `profiles`"
+    },
+    {
+      "source": "submissions_assignment_student_unique",
+      "target": "submissions",
+      "source_files": [
+        "db/migrations/007_submissions_unique.sql",
+        "db/migrations/001_init.sql"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "indexes",
+      "why": "peripheral node `submissions_assignment_student_unique` unexpectedly reaches hub `submissions`"
+    },
+    {
+      "source": "main()",
+      "target": "seedDemo()",
+      "source_files": [
+        "backend/src/server.js",
+        "backend/src/db.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `PgStore` connect `PgStore` to `db.js`?",
+      "why": "High betweenness centrality (0.152) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `MemoryStore` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `MemoryStore` connect `MemoryStore` to `db.js`?",
+      "why": "High betweenness centrality (0.150) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `PgStore` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08156028368794327 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `createStore()` connect `db.js` to `MemoryStore`, `PgStore`, `server.js`?",
+      "why": "High betweenness centrality (0.140) - this node is a cross-community bridge."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `001_init.sql` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.135632183908046 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `server.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08307692307692308 - nodes in this community are weakly interconnected."
+    }
+  ]
+}
