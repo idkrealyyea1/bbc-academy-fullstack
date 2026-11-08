@@ -216,6 +216,32 @@
 .page-home .enrol-form h2 { font-size: clamp(1.65rem, 2.4vw, 2rem); }
 .page-home .enrol-form .btn { width: 100%; }
 
+/* ------------------------- Section dividers ---------------------------- */
+/* One designed break between every homepage section: a full-width hairline
+   with a small oxblood diamond at its centre. The strip takes the background
+   of the section below it, so the break reads as that section's own opening.
+   The soft sections' own top/bottom hairlines, the trust strip's bottom
+   border and the footer's top border are removed on this page, so each
+   boundary has exactly one separator. No gradients. */
+.page-home .section-divider { --sd-bg: var(--background); background: var(--sd-bg); padding-block: clamp(1.25rem, 2.4vw, 1.75rem); }
+.page-home .section-divider--soft { --sd-bg: var(--background-soft); }
+.page-home .section-divider .sd-rule { position: relative; height: 1px; background: var(--border); }
+.page-home .section-divider .sd-diamond {
+  position: absolute;
+  inset-block-start: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--primary);
+  /* Soft halo masks the hairline around the diamond. A border cannot be used
+     here: the global border-box sizing would swallow the 12px fill. */
+  box-shadow: 0 0 0 6px var(--sd-bg);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.page-home .section--soft { border-block: 0; }
+.page-home .trust-strip { border-block-end: 0; }
+.page-home .footer { border-block-start: 0; }
+
 /* ---------------------------- Section rhythm ---------------------------- */
 /* Alternate dense and breathable sections instead of one uniform gap. */
 .page-home #courses { padding-block: clamp(4rem, 7vw, 6rem); }
