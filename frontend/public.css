@@ -417,6 +417,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   color: var(--text-muted);
 }
 .course-card .course-meta .arrow { color: var(--accent); }
+.course-thumb img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .catalogue-empty { grid-column: 1 / -1; }
 
 /* ------------------------------ Course detail ---------------------------- */
@@ -742,6 +743,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 .discipline ul { margin-block-start: var(--sp-2); display: grid; gap: 0.4rem; }
 .discipline li { font-size: var(--fs-xs); color: var(--text-muted); display: flex; gap: 0.5rem; }
 .discipline li::before { content: "—"; color: var(--accent); }
+.discipline-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .teacher-note { border-block-start: 1px solid var(--border); margin-block-start: var(--sp-9); padding-block-start: var(--sp-7); display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start; }
 .teacher-note h2 { font-size: var(--fs-3xl); max-width: 14ch; }
 .teacher-note .notes p { font-size: var(--fs-sm); line-height: 1.75; }

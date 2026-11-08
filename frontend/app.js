@@ -211,6 +211,12 @@
     conversation: { en: 'Conversation Club', ar: 'نادي المحادثة' },
     kids: { en: 'English for Young Learners', ar: 'الإنجليزية للصغار' }
   };
+  // Small thumbnails for the first two catalogue programmes (demo ids only;
+  // API courses have no image field, so they render without one).
+  var COURSE_IMAGES = {
+    'general-a1': { src: 'assets/classroom-wide.jpg', en: 'Adults learning English together in a bright classroom', ar: 'بالغون يتعلّمون الإنجليزية معًا في صفّ مضيء' },
+    'general-a2': { src: 'assets/hero-conversation.jpg', en: 'A learner speaking with a teacher in a classroom', ar: 'متعلّم يتحدّث مع معلّم في صف' }
+  };
   var LEVEL_AR = {
     Beginner: 'مبتدئ', Elementary: 'ابتدائي', Intermediate: 'متوسط',
     'Upper intermediate': 'فوق المتوسط', Advanced: 'متقدم', Proficiency: 'إتقان'
@@ -291,6 +297,7 @@
           var lvl = levelLabel(c, lang);
           var weeks = c.weeks ? (lang === 'ar' ? esc(c.weeks) + ' أسابيع' : esc(c.weeks) + ' weeks') : '';
           return '<article class="course-card">'
+            + (COURSE_IMAGES[c.id] ? '<div class="course-thumb"><img src="' + COURSE_IMAGES[c.id].src + '" alt="' + esc(lang === 'ar' ? COURSE_IMAGES[c.id].ar : COURSE_IMAGES[c.id].en) + '" loading="lazy"></div>' : '')
             + '<div class="course-card-top">'
             + (lvl ? '<span class="badge">' + esc(lvl) + '</span>' : '<span class="badge badge--muted">' + esc(lang === 'ar' ? 'حسب المستوى' : 'Level on assessment') + '</span>')
             + (weeks ? '<span class="meta">' + weeks + '</span>' : '<span></span>')
