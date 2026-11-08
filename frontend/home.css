@@ -17,9 +17,31 @@
 
 /* --------------------------------- Cover --------------------------------- */
 .page-home #home.hero {
+  position: relative;
+  overflow: hidden;
   padding-block: clamp(2.5rem, 5vw, 4.25rem) clamp(3.5rem, 7vw, 6rem);
   border-block-end: 1px solid var(--home-rule);
 }
+/* Two thin concentric rings behind the cover, on the empty side of the
+   headline (mirrors with dir). Flat colour only, no gradients. */
+.page-home #home.hero::before,
+.page-home #home.hero::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.page-home #home.hero::before {
+  width: 460px; height: 460px;
+  top: -200px; inset-inline-end: -120px;
+  border: 1px solid rgba(138, 28, 38, 0.16);
+}
+.page-home #home.hero::after {
+  width: 330px; height: 330px;
+  top: -135px; inset-inline-end: -55px;
+  border: 1px solid rgba(138, 28, 38, 0.10);
+}
+.page-home .hero-grid { position: relative; z-index: 1; }
 .page-home .hero-grid {
   grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.82fr);
   gap: clamp(2rem, 5vw, 4.5rem);
@@ -88,6 +110,16 @@
   color: var(--text-muted);
   opacity: 0.8;
 }
+
+/* -------- Wavy divider under the hero buttons, above the hero meta -------- */
+/* Two flat waves + one thin oxblood crest line, on paper. No gradients. */
+.page-home .hero-wave { line-height: 0; margin-block-start: var(--sp-7); }
+.page-home .hero-wave svg { display: block; width: 100%; height: clamp(40px, 5vw, 60px); }
+.page-home .hero-wave .wave-back { fill: #e9dcc2; }
+.page-home .hero-wave .wave-front { fill: var(--background); }
+.page-home .hero-wave .wave-line { fill: none; stroke: var(--primary); stroke-width: 2; opacity: 0.45; }
+/* The wave replaces the meta's straight hairline. */
+.page-home .hero-meta { margin-block-start: var(--sp-5); padding-block-start: 0; border-block-start: 0; }
 
 /* ------------------------------ Trust strip ------------------------------ */
 .page-home .trust-strip {
