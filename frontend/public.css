@@ -878,4 +878,6 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   .cefr-level + .cefr-level { border-block-start: 1px solid var(--border); }
   .hero-actions { flex-direction: column; align-items: stretch; }
   .hero-actions .btn { width: 100%; }
+  .about-cta .btn-row { flex: 1 1 100%; }
+  .about-cta .btn-row .btn { flex: 1 1 auto; }
 }
