@@ -47,20 +47,25 @@ their account after confirmation; dashboards are reached only via login.
 Language toggle (top right) switches EN/AR and RTL/LTR and persists in
 `localStorage` (`bbc-lang`). Auth token in `localStorage` (`bbc-token`).
 
-## Design system (2026-11 redesign)
+## Design system (2026-11 warm editorial refresh)
 
-One coherent dark editorial system, with no page-specific override stacks:
+One coherent warm-editorial system built on the OpenDesign "Warm Editorial"
+brief, with no page-specific override stacks:
 
 - `system.css` — tokens, typography, layout primitives and shared components
   (buttons, fields, cards, tables, accordion, alerts, navigation, footer, states).
 - `public.css` — public-page compositions only (hero, paths, method, story,
   catalogue, course detail, levels/quiz, FAQ, journal, booking, contact, auth).
+- `home.css` — the homepage cover: oversized display headline, photo plate
+  with a white caption bar, hairline trust strip, varied section rhythm.
 - `dashboard.css` — the student / teacher / admin application shell.
+- `page-transition.css` — the paper door transition between pages.
 
-Palette: obsidian and graphite surfaces, crimson `#A82030`, burgundy depth,
-ivory text and restrained champagne accents. Type: Manrope (UI), Playfair
-Display (editorial display, Latin only) and IBM Plex Sans Arabic (Arabic,
-with logical-property RTL throughout). Both languages are first-class.
+Palette: paper `#fbf8f3` and sand `#f4efe6` surfaces, ink `#1b1917` text,
+oxblood `#8a1c26` accent, hairline rules `rgba(27,25,23,.13)`, near-zero
+shadows and no gradients. Type: Manrope (UI), Lora (editorial display),
+IBM Plex Sans Arabic (Arabic body) and Noto Naskh Arabic (Arabic display),
+with logical-property RTL throughout. Both languages are first-class.
 
 Demo and illustrative material is labelled in the UI. Course data, levels and
 accounts come from the API when one is configured. No pricing, schedules,

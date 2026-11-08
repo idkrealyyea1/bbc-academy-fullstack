@@ -27,9 +27,9 @@
   falls back to a fake success when a request fails.
 - Language: EN/AR toggle flips `dir` (LTR/RTL) and persists in `localStorage`.
   Auth token in `localStorage` (`bbc-token`); user in `bbc-user`.
-- Built for modest connections: self-hosted subset fonts (Manrope, Playfair
-  Display, IBM Plex Sans Arabic), compressed local photography, no UI
-  libraries. Live classes are a **link field** on a lesson
+- Built for modest connections: self-hosted subset fonts (Manrope, Lora,
+  IBM Plex Sans Arabic, Noto Naskh Arabic), compressed local photography, no
+  UI libraries. Live classes are a **link field** on a lesson
   (`live_class_url`, e.g. a Zoom/Meet link supplied by the teacher); no video
   platform is built into this codebase.
 
