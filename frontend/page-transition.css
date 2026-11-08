@@ -1,24 +1,23 @@
 /* BBC Academy page transition — unique to the academy.
-   Two near-black panels open like the doors of a classroom / the cover of a
-   book, revealing the next page. The B-B-C mark pops in, a red line
+   Two paper panels open like the doors of a classroom / the cover of a
+   book, revealing the next page. The B-B-C mark pops in, a red hairline
    sweeps under ACADEMY, then the panels slide apart. Loaded on every page.
-   Adapted to the luxury design system: near-black panels, academy red
-   accent, champagne-gold-free restrained palette, self-hosted font stacks
-   (Manrope / Playfair Display / IBM Plex Sans Arabic) with system fallbacks
+   Editorial system: paper panels, oxblood accent, no gradients, self-hosted
+   font stacks (Manrope / Lora / Noto Naskh Arabic) with system fallbacks
    — no external font requests. */
 .page-transition { position: fixed; inset: 0; z-index: 9999; pointer-events: none; }
 .page-transition.pt-hidden { display: none; }
-.pt-panel { position: absolute; top: 0; bottom: 0; width: 51%; background: var(--background, #0a0a0c); transition: transform .75s cubic-bezier(.76, 0, .24, 1); }
+.pt-panel { position: absolute; top: 0; bottom: 0; width: 51%; background: var(--background, #fbf8f3); transition: transform .75s cubic-bezier(.76, 0, .24, 1); }
 .pt-panel.pt-left { left: 0; }
 .pt-panel.pt-right { right: 0; }
 .pt-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .3s ease; }
 .pt-mark { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; direction: ltr; }
-.pt-mark b { background: var(--text, #f3f0ea); color: var(--background, #0a0a0c); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 700; font-size: 20px; line-height: 1; padding: 11px 10px 10px; letter-spacing: -.05em; animation: pt-pop .5s cubic-bezier(.34, 1.56, .64, 1) both; }
-.pt-mark b:nth-child(2) { background: var(--primary, #a82030); color: #fff; animation-delay: .08s; }
+.pt-mark b { background: var(--text, #1b1917); color: var(--background, #fbf8f3); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 700; font-size: 20px; line-height: 1; padding: 11px 10px 10px; letter-spacing: -.05em; animation: pt-pop .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+.pt-mark b:nth-child(2) { background: var(--primary, #8a1c26); color: #fff; animation-delay: .08s; }
 .pt-mark b:nth-child(3) { animation-delay: .16s; }
-.pt-word { color: var(--text, #f3f0ea); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 700; font-size: 15px; letter-spacing: .42em; margin-inline-start: .42em; animation: pt-rise .5s ease .28s both; }
-.pt-line { width: 120px; height: 3px; background: var(--primary, #a82030); transform-origin: center; animation: pt-line .55s ease .45s both; }
-.pt-tag { color: rgba(243, 240, 234, .65); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 500; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; animation: pt-rise .5s ease .55s both; }
+.pt-word { color: var(--text, #1b1917); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 700; font-size: 15px; letter-spacing: .42em; margin-inline-start: .42em; animation: pt-rise .5s ease .28s both; }
+.pt-line { width: 120px; height: 3px; background: var(--primary, #8a1c26); transform-origin: center; animation: pt-line .55s ease .45s both; }
+.pt-tag { color: rgba(27, 25, 23, .62); font-family: var(--font-sans, "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif); font-weight: 500; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; animation: pt-rise .5s ease .55s both; }
 /* Leaving (entering a page): panels slide apart like opening doors. */
 .page-transition.pt-leaving .pt-panel.pt-left { transform: translateX(-101%); }
 .page-transition.pt-leaving .pt-panel.pt-right { transform: translateX(101%); }

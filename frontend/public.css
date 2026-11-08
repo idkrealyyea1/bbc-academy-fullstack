@@ -10,17 +10,6 @@
   padding-block: clamp(2.25rem, 4vw, 3.5rem) clamp(3rem, 5.5vw, 5rem);
   border-block-end: 1px solid var(--border);
 }
-.hero::before {
-  content: "";
-  position: absolute;
-  inset-block-start: -30%;
-  inset-inline-end: -10%;
-  width: min(760px, 70vw);
-  height: min(760px, 70vw);
-  background: radial-gradient(circle at center, rgba(168, 32, 48, 0.22), rgba(168, 32, 48, 0) 68%);
-  pointer-events: none;
-  z-index: 0;
-}
 .hero .wrap { position: relative; z-index: 1; }
 .hero-grid {
   display: grid;
@@ -37,11 +26,10 @@
 }
 .hero-title em {
   font-style: italic;
-  color: var(--accent-strong);
+  color: var(--primary);
   font-weight: 500;
 }
-:lang(ar) .hero-title { line-height: 1.28; max-width: 18ch; }
-:lang(ar) .hero-title em { font-style: normal; }
+:lang(ar) .hero-title { line-height: 1.34; max-width: 18ch; }
 .hero-lead { font-size: clamp(1rem, 1.3vw, 1.15rem); line-height: 1.75; max-width: 47ch; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-block-start: var(--sp-8); }
 .hero-meta {
@@ -63,21 +51,14 @@
 }
 :lang(ar) .hero-meta strong { font-family: var(--font-sans); font-size: var(--fs-base); font-weight: 600; }
 .hero-media { position: relative; }
-.hero-media::before {
-  content: "";
-  position: absolute;
-  inset-block: 18px -18px;
-  inset-inline: 18px -18px;
-  border: 1px solid rgba(191, 168, 128, 0.26);
-  pointer-events: none;
-}
 .hero-figure {
   position: relative;
   z-index: 1;
   margin: 0;
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  background: var(--surface-inset);
 }
 .hero-figure img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; }
 .hero-caption {
@@ -251,13 +232,11 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 .story-media { position: relative; }
 .story-media .media { border: 1px solid var(--border); }
 .story-media figcaption {
-  position: absolute;
-  inset-block-end: 0;
-  inset-inline: 0;
-  padding: 1.2rem 1.4rem;
+  margin-block-start: var(--sp-4);
   font-size: var(--fs-xs);
-  color: rgba(243, 240, 234, 0.72);
-  background: linear-gradient(to top, rgba(8, 8, 10, 0.85), transparent);
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 44ch;
 }
 .story-copy h2 { margin-block: var(--sp-4) var(--sp-5); max-width: 18ch; }
 .story-copy p { max-width: 52ch; }
@@ -417,12 +396,12 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   gap: var(--sp-3);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   padding: clamp(1.25rem, 2vw, 1.6rem);
   min-height: 15rem;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.course-card:hover { border-color: var(--border-strong); background: var(--surface-raised); transform: translateY(-2px); }
+.course-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .course-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
 .course-card h3 { font-family: var(--font-sans); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0; line-height: 1.45; }
 .course-card p { font-size: var(--fs-sm); line-height: 1.7; }
@@ -485,7 +464,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   inset-block-start: calc(var(--header-h) + 1.5rem);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   padding: clamp(1.35rem, 2.4vw, 1.9rem);
 }
 .detail-aside h2 { font-size: var(--fs-xl); margin-block-end: var(--sp-5); }
@@ -649,7 +628,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 .booking-form h2 { font-size: var(--fs-2xl); margin-block-end: var(--sp-2); }
 .booking-form > p { font-size: var(--fs-sm); margin-block-end: var(--sp-5); }
 .booking-form .success { margin-block-start: var(--sp-5); }
-.booking-form .success h3 { font-family: var(--font-display); font-size: var(--fs-xl); color: #dcefe4; }
+.booking-form .success h3 { font-family: var(--font-display); font-size: var(--fs-xl); color: #1f4b37; }
 .booking-form .btn.block { margin-block-start: var(--sp-5); }
 .booking-note { margin-block-start: var(--sp-4); }
 
@@ -662,7 +641,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   padding-block: clamp(2.5rem, 5vw, 4rem);
 }
 .contact-cards { display: grid; gap: var(--sp-4); }
-.contact-card { border: 1px solid var(--border); background: var(--surface); padding: 1.35rem 1.5rem; }
+.contact-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 1.35rem 1.5rem; }
 .contact-card h2 { font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0; margin-block-end: 0.35rem; }
 .contact-card p { font-size: var(--fs-sm); line-height: 1.65; }
 .contact-card a { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
@@ -677,7 +656,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 34rem;
 }
@@ -687,7 +666,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(8, 8, 10, 0.94), rgba(8, 8, 10, 0.35) 55%, rgba(8, 8, 10, 0.15));
+  background: linear-gradient(to top, rgba(18, 14, 12, 0.92), rgba(18, 14, 12, 0.55) 55%, rgba(18, 14, 12, 0.34));
 }
 .auth-visual-inner {
   position: relative;
@@ -699,15 +678,15 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   padding: clamp(1.5rem, 3vw, 2.5rem);
   gap: var(--sp-4);
 }
-.auth-visual-inner h2 { color: var(--text); font-size: clamp(1.6rem, 2.6vw, 2.15rem); max-width: 15ch; line-height: 1.2; }
-.auth-visual-inner p { color: rgba(243, 240, 234, 0.78); font-size: var(--fs-sm); max-width: 34ch; }
+.auth-visual-inner h2 { color: var(--text-inverse); font-size: clamp(1.6rem, 2.6vw, 2.15rem); max-width: 15ch; line-height: 1.2; }
+.auth-visual-inner p { color: rgba(255, 252, 247, 0.82); font-size: var(--fs-sm); max-width: 34ch; }
 .auth-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block-start: var(--sp-2); }
 .auth-chips span {
   font-size: var(--fs-micro);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(243, 240, 234, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 252, 247, 0.85);
+  border: 1px solid rgba(255, 252, 247, 0.34);
   padding: 0.3rem 0.6rem;
   border-radius: var(--radius-xs);
 }
@@ -819,7 +798,18 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 .section-note { margin-block-start: var(--sp-6); font-size: var(--fs-xs); color: var(--text-muted); max-width: 72ch; line-height: 1.7; }
 
 /* ------------------------------- Responsive ------------------------------ */
-/* Keep the editorial two-column hero on 1024px laptops; stack at tablet width. */
+/* 1080px: only grids that genuinely need fewer columns. */
+@media (max-width: 1080px) {
+  .method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .method-step { padding-block-end: var(--sp-7); }
+  .method-step:nth-child(2n) { border-inline-end: 0; padding-inline-end: 0; }
+  .method-step:nth-child(n + 3) { border-block-start: 1px solid var(--border); }
+  .cefr-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cefr-level:nth-child(3n + 1) { border-inline-start: 0; }
+  .cefr-level:nth-child(n + 4) { border-block-start: 1px solid var(--border); }
+}
+/* 920px: the editorial two-column compositions give way to a single column,
+   so 1024px laptops keep the side-by-side layout. */
 @media (max-width: 920px) {
   .hero-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-9); }
   .hero-copy { max-width: 46rem; }
@@ -827,14 +817,8 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   .hero-media { max-width: 34rem; width: 100%; }
   .hero-index { display: none; }
   .hero-figure { aspect-ratio: 4 / 5; }
-}
-@media (max-width: 1080px) {
   .paths-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-8); }
   .paths-aside { position: static; }
-  .method-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .method-step { padding-block-end: var(--sp-7); }
-  .method-step:nth-child(2n) { border-inline-end: 0; padding-inline-end: 0; }
-  .method-step:nth-child(n + 3) { border-block-start: 1px solid var(--border); }
   .team-split, .story-split, .enrol-grid, .journal-empty, .booking-grid, .contact-grid, .about-intro, .chapter, .teacher-note { grid-template-columns: minmax(0, 1fr); }
   .chapter:nth-child(even) .chapter-media { order: 0; }
   .detail-grid { grid-template-columns: minmax(0, 1fr); }
@@ -846,15 +830,12 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   .auth-visual { min-height: 17rem; }
   .auth-visual img { object-position: 50% 40%; }
   .auth-form { padding: clamp(1.5rem, 5vw, 2.5rem); }
-  .discipline-grid { grid-template-columns: minmax(0, 1fr); }
+  .discipline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .level-notes { grid-template-columns: minmax(0, 1fr); }
   .course-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .trust-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .trust-item:nth-child(odd) { border-inline-start: 0; padding-inline-start: 0; }
   .trust-item:nth-child(n + 3) { border-block-start: 1px solid var(--border); }
-  .cefr-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .cefr-level:nth-child(3n + 1) { border-inline-start: 0; }
-  .cefr-level:nth-child(n + 4) { border-block-start: 1px solid var(--border); }
   .values { grid-template-columns: minmax(0, 1fr); }
   .value { border-inline-end: 0; padding-inline-end: 0; border-block-start: 1px solid var(--border); }
   .value:first-child { border-block-start: 0; padding-block-start: 0; }
@@ -862,7 +843,7 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 @media (max-width: 700px) {
   .hero { padding-block-start: var(--sp-7); }
   .hero-title { max-width: 100%; }
-  .hero-media::before { display: none; }
+  .discipline-grid { grid-template-columns: minmax(0, 1fr); }
   .hero-actions .btn { flex: 1 1 auto; }
   .hero-meta { gap: var(--sp-5); }
   .path-row { grid-template-columns: 2.6rem minmax(0, 1fr); }
@@ -897,4 +878,6 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
   .cefr-level + .cefr-level { border-block-start: 1px solid var(--border); }
   .hero-actions { flex-direction: column; align-items: stretch; }
   .hero-actions .btn { width: 100%; }
+  .about-cta .btn-row { flex: 1 1 100%; }
+  .about-cta .btn-row .btn { flex: 1 1 auto; }
 }
