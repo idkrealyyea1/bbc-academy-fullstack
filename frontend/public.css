@@ -630,6 +630,14 @@ html[dir="rtl"] .hero-index { writing-mode: vertical-lr; }
 .booking-form > p { font-size: var(--fs-sm); margin-block-end: var(--sp-5); }
 .booking-form .success { margin-block-start: var(--sp-5); }
 .booking-form .success h3 { font-family: var(--font-display); font-size: var(--fs-xl); color: #1f4b37; }
+/* Sent state: the form collapses to the thank-you block, so the confirmation
+   is visible without scrolling — and stays visible if the page reloads. */
+.booking-form.is-sent > p,
+.booking-form.is-sent .form-grid,
+.booking-form.is-sent .btn,
+.booking-form.is-sent .form-privacy,
+.booking-form.is-sent .demo-note { display: none; }
+.booking-form.is-sent .success { margin-block-start: var(--sp-3); }
 .booking-form .btn.block { margin-block-start: var(--sp-5); }
 .booking-note { margin-block-start: var(--sp-4); }
 

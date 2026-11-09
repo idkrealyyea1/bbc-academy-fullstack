@@ -135,6 +135,13 @@
           }
         });
         bookingForm.dataset.submitted = '1';
+        // Sent state: collapse the form to the thank-you block (unmissable
+        // without scrolling) and remember it for the next load, in case the
+        // browser reloads the page after submit (some mobile proxy browsers do).
+        // Collapse FIRST, then scroll: the scroll must measure the collapsed
+        // layout, or the thank-you block ends up above the viewport.
+        bookingForm.classList.add('is-sent');
+        try { sessionStorage.setItem('bbc-booking-sent', '1'); } catch (e) { /* storage unavailable: the visible state above is enough */ }
         showSuccess(document.getElementById('bookingOk'), bookingForm);
         setBusy(bookingForm, false);
         var submit = bookingForm.querySelector('[type="submit"]');
@@ -144,6 +151,26 @@
         errBox(bookingForm, t('Booking request failed: ', 'فشل إرسال الطلب: ') + err.message);
       }
     });
+
+    // If the last submit succeeded and the browser then reloaded the page,
+    // show the sent state again instead of a fresh-looking form. The flag is
+    // consumed on this load, so a later fresh visit shows the form as usual.
+    var bookingSent = null;
+    try { bookingSent = sessionStorage.getItem('bbc-booking-sent'); } catch (e) { /* storage unavailable */ }
+    if (bookingSent && bookingForm) {
+      try { sessionStorage.removeItem('bbc-booking-sent'); } catch (e) { /* ignore */ }
+      bookingForm.dataset.submitted = '1';
+      bookingForm.classList.add('is-sent');
+      showSuccess(document.getElementById('bookingOk'), bookingForm);
+      // Browsers restore the pre-reload scroll position after load, which can
+      // override the scroll above; re-assert it once layout has settled.
+      window.setTimeout(function () {
+        var okEl = document.getElementById('bookingOk');
+        if (okEl) okEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }, 300);
+      var sentSubmit = bookingForm.querySelector('[type="submit"]');
+      if (sentSubmit) sentSubmit.disabled = true;
+    }
 
     /* --------------------------- home enrolment --------------------------- */
     var enrollForm = document.querySelector('#enrollment-form');
@@ -344,7 +371,7 @@
       try {
         var data = await req('/api/courses');
         if (!data.courses || !data.courses.length) return;
-        var placeholder = courseSel.querySelector('option[value=""]');
+        var placeholder = courseSel.querySelector('option[value="not-sure"]');
         courseSel.innerHTML = (placeholder ? placeholder.outerHTML : '') + data.courses.map(function (c) {
           return '<option value="' + esc(c.id) + '" data-en="' + esc(c.title_en) + '" data-ar="' + esc(c.title_ar || c.title_en) + '">'
             + esc(lang() === 'ar' ? (c.title_ar || c.title_en) : c.title_en) + '</option>';
