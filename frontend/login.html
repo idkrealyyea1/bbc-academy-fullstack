@@ -13,10 +13,10 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="assets/fonts/plex-ar-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="system.css"><link rel="stylesheet" href="public.css"><link rel="stylesheet" href="page-transition.css">
+<link rel="stylesheet" href="system.css"><link rel="stylesheet" href="public.css"><link rel="stylesheet" href="login.css"><link rel="stylesheet" href="page-transition.css">
 <script>try{var l=localStorage.getItem('bbc-lang')||'ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}</script>
 </head>
-<body><div class="page-transition" id="pageTransition" aria-hidden="true"><div class="pt-panel pt-left"></div><div class="pt-panel pt-right"></div><div class="pt-content"><div class="pt-mark"><b>B</b><b>B</b><b>C</b></div><div class="pt-word">ACADEMY</div><div class="pt-line"></div><div class="pt-tag">English, with confidence</div></div></div>
+<body class="page-login"><div class="page-transition" id="pageTransition" aria-hidden="true"><div class="pt-panel pt-left"></div><div class="pt-panel pt-right"></div><div class="pt-content"><div class="pt-mark"><b>B</b><b>B</b><b>C</b></div><div class="pt-word">ACADEMY</div><div class="pt-line"></div><div class="pt-tag">English, with confidence</div></div></div>
 <a class="skip-link" href="#main" data-en="Skip to content" data-ar="تخطَّ إلى المحتوى">تخطَّ إلى المحتوى</a>
 <header class="topbar">
   <div class="wrap nav-inner">
@@ -40,54 +40,67 @@
 </header>
 
 <main id="main">
-  <section class="auth-section">
-    <div class="wrap">
-      <div class="auth-shell">
-        <div class="auth-visual">
-          <img src="assets/hero-conversation.jpg" width="1000" height="1250" alt="Adults talking together in an English conversation club"
-            data-alt-en="Adults talking together in an English conversation club"
-            data-alt-ar="بالغون يتحدثون معًا في نادي محادثة بالإنجليزية" loading="eager" decoding="async">
-          <div class="auth-visual-inner">
-            <p class="eyebrow" data-en="BBC English Academy" data-ar="أكاديمية BBC للإنجليزية">أكاديمية BBC للإنجليزية</p>
-            <h2 data-en="Your English voice deserves to be heard." data-ar="صوتك بالإنجليزية يستحق أن يُسمَع.">صوتك بالإنجليزية يستحق أن يُسمَع.</h2>
-            <p data-en="One place for your lessons, homework, feedback and progress." data-ar="مكان واحد لدروسك وواجباتك وملاحظاتك وتقدّمك.">مكان واحد لدروسك وواجباتك وملاحظاتك وتقدّمك.</p>
-            <div class="auth-chips">
-              <span data-en="Lessons" data-ar="الدروس">الدروس</span>
-              <span data-en="Homework" data-ar="الواجبات">الواجبات</span>
-              <span data-en="Progress" data-ar="التقدّم">التقدّم</span>
-            </div>
+  <section class="login-split" aria-labelledby="loginTitle">
+    <aside class="login-story">
+      <div class="login-story-inner">
+        <figure class="login-plate">
+          <div class="plate-img">
+            <img src="assets/hero-conversation.jpg" width="1000" height="1250" alt="Adults talking together in an English conversation club"
+              data-alt-en="Adults talking together in an English conversation club"
+              data-alt-ar="بالغون يتحدثون معًا في نادي محادثة بالإنجليزية" loading="eager" decoding="async">
           </div>
+          <figcaption><span data-en="Inside the academy · conversation club" data-ar="داخل الأكاديمية · نادي المحادثة">داخل الأكاديمية · نادي المحادثة</span></figcaption>
+        </figure>
+        <div class="login-story-copy">
+          <p class="login-kicker" data-en="Student portal" data-ar="بوابة الطالب">بوابة الطالب</p>
+          <h2 class="login-quote" data-en="Your English voice deserves to be heard." data-ar="صوتك بالإنجليزية يستحق أن يُسمَع.">صوتك بالإنجليزية يستحق أن يُسمَع.</h2>
+          <p class="login-sub" data-en="One place for your lessons, homework, feedback and progress." data-ar="مكان واحد لدروسك وواجباتك وملاحظاتك وتقدّمك.">مكان واحد لدروسك وواجباتك وملاحظاتك وتقدّمك.</p>
         </div>
-        <div class="auth-form">
-          <p class="eyebrow" data-en="Student portal" data-ar="بوابة الطالب">بوابة الطالب</p>
-          <h1 data-en="Welcome back" data-ar="أهلًا بعودتك">أهلًا بعودتك</h1>
-          <p class="lead" data-en="Sign in to open your dashboard." data-ar="سجّل الدخول لفتح لوحتك.">سجّل الدخول لفتح لوحتك.</p>
-          <form data-mock="loginOk">
-            <div class="field">
-              <label for="loginIdentifier" data-en="Email or username" data-ar="البريد الإلكتروني أو اسم المستخدم">البريد الإلكتروني أو اسم المستخدم</label>
-              <input id="loginIdentifier" name="identifier" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required dir="ltr"
-                data-ph-en="you@example.com or username" data-ph-ar="you@example.com أو اسم المستخدم">
-            </div>
-            <div class="field field--password">
-              <label for="loginPassword" data-en="Password" data-ar="كلمة المرور">كلمة المرور</label>
-              <input id="loginPassword" name="password" type="password" autocomplete="current-password" required
-                data-ph-en="Your password" data-ph-ar="كلمة المرور">
-              <button class="pw-toggle" type="button" data-pw-toggle="loginPassword" data-en="Show" data-ar="إظهار">إظهار</button>
-            </div>
-            <button class="btn" type="submit" data-en="Sign in" data-ar="تسجيل الدخول">تسجيل الدخول</button>
-          </form>
-          <div id="loginOk" class="success" role="status" hidden>
-            <span data-en="Signed in. Your dashboard is ready." data-ar="تم تسجيل الدخول. لوحتك جاهزة.">تم تسجيل الدخول. لوحتك جاهزة.</span>
-            <a href="dashboard-student.html" data-en="Open student dashboard" data-ar="افتح لوحة الطالب">افتح لوحة الطالب</a>
+        <ol class="login-index">
+          <li><span class="idx">01</span><span data-en="Lessons and lesson links" data-ar="الدروس وروابط الحصص">الدروس وروابط الحصص</span></li>
+          <li><span class="idx">02</span><span data-en="Homework and submissions" data-ar="الواجبات والتسليمات">الواجبات والتسليمات</span></li>
+          <li><span class="idx">03</span><span data-en="Your teacher’s feedback" data-ar="ملاحظات معلّمك">ملاحظات معلّمك</span></li>
+          <li><span class="idx">04</span><span data-en="Attendance and progress" data-ar="الحضور والتقدّم">الحضور والتقدّم</span></li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="login-panel">
+      <div class="login-panel-inner">
+        <header class="login-head">
+          <span class="login-no" aria-hidden="true">01</span>
+          <p class="login-kicker" data-en="Student access" data-ar="دخول الطالب">دخول الطالب</p>
+        </header>
+        <h1 id="loginTitle" data-en="Welcome back" data-ar="أهلًا بعودتك">أهلًا بعودتك</h1>
+        <p class="login-lead" data-en="Sign in to open your dashboard." data-ar="سجّل الدخول لفتح لوحتك.">سجّل الدخول لفتح لوحتك.</p>
+
+        <form data-mock="loginOk">
+          <div class="field">
+            <label for="loginIdentifier" data-en="Email or username" data-ar="البريد الإلكتروني أو اسم المستخدم">البريد الإلكتروني أو اسم المستخدم</label>
+            <input id="loginIdentifier" name="identifier" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required dir="ltr"
+              data-ph-en="you@example.com or username" data-ph-ar="name@example.com">
           </div>
-          <p id="loginDemoNote" class="login-demo" data-en="Demo mode: any email and password open the demo dashboard. No account data is sent." data-ar="نسخة عرض: أي بريد وكلمة مرور يفتحان اللوحة التجريبية. لا تُرسل بيانات حساب.">نسخة عرض: أي بريد وكلمة مرور يفتحان اللوحة التجريبية. لا تُرسل بيانات حساب.</p>
-          <p class="auth-links">
-            <span data-en="New here?" data-ar="جديد هنا؟">جديد هنا؟</span> <a href="booking.html" data-en="Book a seat" data-ar="احجز مقعدًا">احجز مقعدًا</a>
-            <span aria-hidden="true"> · </span>
-            <a href="contact.html" data-en="Forgot your password?" data-ar="نسيت كلمة المرور؟">نسيت كلمة المرور؟</a>
-          </p>
-          <p class="auth-help" data-en="Accounts are created by the academy after your booking is confirmed. If you cannot sign in, contact the academy and the team will reset your password." data-ar="تُنشئ الأكاديمية الحسابات بعد تأكيد حجزك. وإن لم تستطع تسجيل الدخول، تواصل مع الأكاديمية وسيعيد الفريق تعيين كلمة المرور.">تُنشئ الأكاديمية الحسابات بعد تأكيد حجزك. وإن لم تستطع تسجيل الدخول، تواصل مع الأكاديمية وسيعيد الفريق تعيين كلمة المرور.</p>
+          <div class="field field--password">
+            <label for="loginPassword" data-en="Password" data-ar="كلمة المرور">كلمة المرور</label>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required
+              data-ph-en="Your password" data-ph-ar="••••••••">
+            <button class="pw-toggle" type="button" data-pw-toggle="loginPassword" data-en="Show" data-ar="إظهار">إظهار</button>
+          </div>
+          <button class="btn login-submit" type="submit"><span data-en="Sign in" data-ar="تسجيل الدخول">تسجيل الدخول</span><span class="arrow" aria-hidden="true">→</span></button>
+        </form>
+
+        <div id="loginOk" class="success" role="status" hidden>
+          <span data-en="Signed in. Your dashboard is ready." data-ar="تم تسجيل الدخول. لوحتك جاهزة.">تم تسجيل الدخول. لوحتك جاهزة.</span>
+          <a href="dashboard-student.html" data-en="Open student dashboard" data-ar="افتح لوحة الطالب">افتح لوحة الطالب</a>
         </div>
+        <p id="loginDemoNote" class="login-demo" data-en="Demo mode: any email and password open the demo dashboard. No account data is sent." data-ar="نسخة عرض: أي بريد وكلمة مرور يفتحان اللوحة التجريبية. لا تُرسل بيانات حساب.">نسخة عرض: أي بريد وكلمة مرور يفتحان اللوحة التجريبية. لا تُرسل بيانات حساب.</p>
+
+        <p class="login-links">
+          <span data-en="New here?" data-ar="جديد هنا؟">جديد هنا؟</span> <a href="booking.html" data-en="Book a seat" data-ar="احجز مقعدًا">احجز مقعدًا</a>
+          <span aria-hidden="true"> · </span>
+          <a href="contact.html" data-en="Forgot your password?" data-ar="نسيت كلمة المرور؟">نسيت كلمة المرور؟</a>
+        </p>
+        <p class="login-help" data-en="Accounts are created by the academy after your booking is confirmed. If you cannot sign in, contact the academy and the team will reset your password." data-ar="تُنشئ الأكاديمية الحسابات بعد تأكيد حجزك. وإن لم تستطع تسجيل الدخول، تواصل مع الأكاديمية وسيعيد الفريق تعيين كلمة المرور.">تُنشئ الأكاديمية الحسابات بعد تأكيد حجزك. وإن لم تستطع تسجيل الدخول، تواصل مع الأكاديمية وسيعيد الفريق تعيين كلمة المرور.</p>
       </div>
     </div>
   </section>

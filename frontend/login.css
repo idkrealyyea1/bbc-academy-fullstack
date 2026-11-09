@@ -1,0 +1,335 @@
+/* ==========================================================================
+   BBC English Academy — student login: "The threshold"
+   --------------------------------------------------------------------------
+   Two rooms, one seam. The left room is ink: a print pinned to the wall, the
+   promise in the student's own words, and what the portal actually holds. The
+   right room is paper: the sign-in set as an access card with ruled fields.
+   A 2px oxblood rule runs the seam — crossing it is the point of the page.
+
+   Same Warm Editorial tokens as the rest of the site: paper, ink, one accent,
+   hairlines, no decorative gradients. Page-scoped: no other route is affected.
+   ========================================================================== */
+
+.page-login {
+  --ink: #1b1917;
+  --ink-paper: #fbf8f3;
+  --ink-muted: rgba(251, 248, 243, 0.66);
+  --ink-faint: rgba(251, 248, 243, 0.42);
+  --ink-line: rgba(251, 248, 243, 0.16);
+  --ink-accent: #d99aa0;
+  background: var(--background);
+}
+
+/* --------------------------------- Split --------------------------------- */
+.page-login .login-split {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  min-height: calc(100vh - var(--header-h));
+  margin: 0;
+  padding: 0;
+}
+
+/* ------------------------------ Ink room --------------------------------- */
+.page-login .login-story {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--ink);
+  color: var(--ink-paper);
+  padding: clamp(1.75rem, 3.2vw, 2.5rem) clamp(1.5rem, 4vw, 3.5rem);
+  overflow: hidden;
+}
+/* the seam: the only oxblood line on the page, and the point of the page */
+.page-login .login-story::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 2px;
+  background: var(--primary);
+}
+.page-login .login-story-inner {
+  width: 100%;
+  max-width: 30rem;
+  margin-inline-start: auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.35rem, 2.4vw, 2rem);
+}
+
+/* A print pinned in the dark: white mat, slight rotation, real shadow. */
+.page-login .login-plate {
+  margin: 0;
+  padding: 10px 10px 0;
+  background: var(--ink-paper);
+  color: #4b453e;
+  transform: rotate(-1.2deg);
+  box-shadow: 0 30px 60px -38px rgba(0, 0, 0, 0.85);
+}
+html[dir="rtl"] .page-login .login-plate { transform: rotate(1.2deg); }
+.page-login .login-plate .plate-img {
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--surface-inset);
+}
+.page-login .login-plate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+.page-login .login-plate figcaption {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  color: #6b6259;
+  padding-block: 0.55rem 0.6rem;
+}
+:lang(ar) .page-login .login-plate figcaption { letter-spacing: 0; font-size: var(--fs-xs); }
+
+.page-login .login-story-copy { display: flex; flex-direction: column; gap: var(--sp-3); }
+.page-login .login-kicker {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-accent);
+}
+:lang(ar) .page-login .login-kicker { letter-spacing: 0; text-transform: none; font-size: var(--fs-sm); }
+.page-login .login-quote {
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 2.5vw, 2.15rem);
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  color: var(--ink-paper);
+  max-width: 19ch;
+}
+:lang(ar) .page-login .login-quote { line-height: 1.45; letter-spacing: 0; }
+.page-login .login-sub {
+  font-size: var(--fs-sm);
+  line-height: 1.65;
+  color: var(--ink-muted);
+  max-width: 34ch;
+}
+
+/* What is actually inside: a short ledger, numbered like the homepage acts. */
+.page-login .login-index {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-block-start: 1px solid var(--ink-line);
+}
+.page-login .login-index li {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: baseline;
+  padding-block: 0.65rem;
+  border-block-end: 1px solid var(--ink-line);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.page-login .login-index .idx {
+  font-family: var(--font-display);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.1em;
+  color: var(--ink-accent);
+}
+
+/* ------------------------------ Paper room ------------------------------- */
+.page-login .login-panel {
+  display: flex;
+  align-items: center;
+  background: var(--background);
+  padding: clamp(1.75rem, 3.2vw, 2.5rem) clamp(1.5rem, 4vw, 3.5rem);
+}
+.page-login .login-panel-inner {
+  width: 100%;
+  max-width: 25.5rem;
+  margin-inline: auto;
+}
+.page-login .login-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding-block-end: 0.8rem;
+  border-block-end: 1px solid var(--border-strong);
+  margin-block-end: clamp(1.5rem, 3vw, 2.25rem);
+}
+.page-login .login-no {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.page-login .login-panel .login-kicker { color: var(--text-muted); }
+.page-login .login-panel h1 {
+  font-size: clamp(2.1rem, 3.6vw, 2.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  margin-block-end: var(--sp-3);
+}
+:lang(ar) .page-login .login-panel h1 { line-height: 1.3; letter-spacing: 0; }
+.page-login .login-lead {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  max-width: 34ch;
+}
+
+/* The access card: fields are ruled lines to write on, not boxes. */
+.page-login .login-panel form {
+  display: grid;
+  gap: clamp(1.15rem, 2.2vw, 1.6rem);
+  margin-block-start: clamp(1.6rem, 3vw, 2.1rem);
+}
+.page-login .login-panel .field { gap: 0; }
+.page-login .login-panel .field label {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-block-end: 0.15rem;
+}
+:lang(ar) .page-login .login-panel .field label {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: var(--fs-xs);
+}
+.page-login .login-panel .field input {
+  height: 46px;
+  border: 0;
+  border-block-end: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0;
+  font-size: var(--fs-md);
+  color: var(--text);
+  transition: border-color var(--dur) var(--ease);
+}
+.page-login .login-panel .field input:hover { border-block-end-color: var(--text-secondary); }
+.page-login .login-panel .field input:focus {
+  border-block-end-color: var(--primary);
+  box-shadow: none;
+}
+.page-login .login-panel .field--password input { padding-inline-end: 4.2rem; }
+.page-login .login-panel .pw-toggle {
+  inset-block-end: 0;
+  height: 46px;
+  padding-inline: 0;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-block-end: 1px solid transparent;
+}
+:lang(ar) .page-login .login-panel .pw-toggle { letter-spacing: 0; text-transform: none; font-size: var(--fs-xs); }
+.page-login .login-panel .pw-toggle:hover { color: var(--primary); }
+
+.page-login .login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 52px;
+  margin-block-start: var(--sp-2);
+  padding-inline: 1.15rem;
+}
+.page-login .login-submit .arrow { font-size: 1.05rem; line-height: 1; }
+:lang(ar) .page-login .login-submit .arrow { transform: scaleX(-1); }
+
+/* Feedback from the API keeps its own voice: quiet, never a red banner. */
+.page-login .api-error {
+  margin-block-start: var(--sp-4);
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-inline-start: 2px solid var(--danger);
+  border-radius: 0;
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.page-login .success {
+  margin-block-start: var(--sp-4);
+  padding: 0;
+  border: 0;
+  border-block-start: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+}
+.page-login .success a {
+  display: inline-block;
+  margin-inline-start: 0.2rem;
+  color: var(--primary);
+  border-block-end: 1px solid var(--primary);
+  padding-block-end: 1px;
+  text-decoration: none;
+}
+.page-login .login-demo {
+  margin-block-start: var(--sp-4);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px dashed var(--border-strong);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.page-login .login-links {
+  margin-block-start: var(--sp-5);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.9;
+}
+.page-login .login-links a {
+  color: var(--text);
+  border-block-end: 1px solid var(--border-strong);
+  padding-block-end: 1px;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.page-login .login-links a:hover { color: var(--primary); border-block-end-color: var(--primary); }
+.page-login .login-help {
+  margin-block-start: var(--sp-5);
+  padding-block-start: var(--sp-4);
+  border-block-start: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ------------------------------ Responsive ------------------------------- */
+@media (max-width: 1080px) {
+  .page-login .login-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+  .page-login .login-quote { font-size: clamp(1.5rem, 2.6vw, 1.9rem); }
+}
+
+@media (max-width: 920px) {
+  .page-login .login-split {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .page-login .login-story { padding-block: clamp(1.75rem, 5vw, 2.5rem); }
+  .page-login .login-story::after { inset-block: auto; inset-inline: 0; inset-block-end: 0; width: auto; height: 2px; }
+  .page-login .login-story-inner { max-width: none; gap: var(--sp-5); }
+  .page-login .login-plate .plate-img { aspect-ratio: 16 / 9; }
+  .page-login .login-quote { max-width: 26ch; }
+  .page-login .login-index { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block-start: 0; }
+  .page-login .login-index li { border-block-start: 1px solid var(--ink-line); }
+  .page-login .login-index li:nth-child(2n) { padding-inline-start: var(--sp-4); }
+  .page-login .login-panel { padding-block: clamp(2rem, 6vw, 3rem); }
+  .page-login .login-panel-inner { max-width: none; margin-inline: 0; }
+}
+
+@media (max-width: 560px) {
+  .page-login .login-index { grid-template-columns: minmax(0, 1fr); }
+  .page-login .login-index li:nth-child(2n) { padding-inline-start: 0; }
+  .page-login .login-plate { padding: 8px 8px 0; }
+  .page-login .login-plate .plate-img { aspect-ratio: 3 / 2; }
+  .page-login .login-panel h1 { font-size: clamp(1.85rem, 7vw, 2.2rem); }
+}
