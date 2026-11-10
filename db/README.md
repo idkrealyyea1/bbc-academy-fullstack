@@ -19,7 +19,11 @@ production project until the owner has confirmed the demo content is wanted.
    current API: the assignment insert writes `questions`, and submissions write
    answers. Files are stored in Postgres and served only by the authenticated
    API, so no public bucket is involved.
-10. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
+10. `migrations/009_staff_role.sql` — the `staff` role used by the student
+    records dashboard (adds students, usernames, passwords, enrolments).
+    **Required** before creating a staff account: the `profiles.role` enum has
+    no `staff` value until this runs.
+11. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
    prices are NULL on purpose (TODO for the owner); teacher rows are labelled
    DEMO and must be replaced with real staff.
 

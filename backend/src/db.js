@@ -146,6 +146,14 @@ class MemoryStore {
     }
     return rows.map(s => ({ ...s, student_name: (this.users.find(u => u.id === s.student_id) || {}).full_name || null }));
   }
+  // Staff see one student's work: the assignment title and course come along
+  // so the record reads on its own without a second lookup.
+  async listSubmissionsForStudent(studentId) {
+    return this.submissions.filter(s => s.student_id === studentId).map(s => {
+      const a = this.assignments.find(x => x.id === s.assignment_id) || {};
+      return { ...s, assignment_title: a.title || null, course_id: a.course_id || null };
+    });
+  }
   async gradeSubmission(id, grade, feedback) {
     const s = this.submissions.find(x => x.id === id); if (!s) return null;
     s.grade = grade; s.feedback = feedback;
@@ -239,6 +247,9 @@ class PgStore {
     if (teacherId) { vals.push(teacherId); where.push(`a.teacher_id=$${vals.length}`); }
     return this.q(`SELECT s.*, p.full_name AS student_name FROM submissions s JOIN assignments a ON a.id=s.assignment_id LEFT JOIN profiles p ON p.id=s.student_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY s.created_at DESC`, vals);
   }
+  async listSubmissionsForStudent(studentId) {
+    return this.q('SELECT s.*, a.title AS assignment_title, a.course_id FROM submissions s JOIN assignments a ON a.id=s.assignment_id WHERE s.student_id=$1 ORDER BY s.created_at DESC', [studentId]);
+  }
   async gradeSubmission(id, grade, feedback) {
     const s = (await this.q('UPDATE submissions SET grade=$1, feedback=$2 WHERE id=$3 RETURNING *', [grade, feedback || null, id]))[0];
     if (!s) return null;
@@ -290,6 +301,7 @@ async function seedDemo(store, bcrypt) {
   const demos = [
     { email: 'student@demo.local', full_name: 'Demo Student', role: 'student' },
     { email: 'teacher@demo.local', full_name: 'Demo Teacher', role: 'teacher' },
+    { email: 'staff@demo.local', full_name: 'Demo Staff', role: 'staff' },
     { email: 'admin@demo.local', full_name: 'Demo Admin', role: 'admin' },
   ];
   for (const d of demos) {

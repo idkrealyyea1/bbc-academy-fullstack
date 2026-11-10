@@ -111,7 +111,7 @@ app.post('/api/auth/register', registerLimiter, wrap(async (req, res) => {
     const key = process.env.ADMIN_SETUP_KEY;
     if (!key || req.headers['x-admin-setup-key'] !== key) return bad(res, 403, 'Admin registration requires ADMIN_SETUP_KEY');
   } else if (wanted !== 'student') {
-    return bad(res, 403, 'Teachers are created by an admin');
+    return bad(res, 403, 'Teachers and staff are created by an admin');
   }
   const username = normaliseUsername(req.body && req.body.username);
   if (username === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
@@ -568,7 +568,7 @@ app.post('/api/admin/users', auth, roles('admin'), wrap(async (req, res) => {
   if (typeof password !== 'string' || password.length < 8) return bad(res, 400, 'Password must be at least 8 characters');
   if (!reqStr(req.body, 'full_name', 200)) return bad(res, 400, 'full_name required');
   const wanted = role || 'student';
-  if (!['student', 'teacher', 'admin'].includes(wanted)) return bad(res, 400, 'role must be student, teacher or admin');
+  if (!['student', 'teacher', 'staff', 'admin'].includes(wanted)) return bad(res, 400, 'role must be student, teacher, staff or admin');
   const username = normaliseUsername(req.body && req.body.username);
   if (username === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
   if (await store.findUserByEmail(email)) return bad(res, 409, 'Email already registered');
@@ -584,7 +584,7 @@ app.put('/api/admin/users/:id', auth, roles('admin'), wrap(async (req, res) => {
   if (b.full_name !== undefined) { if (!reqStr(b, 'full_name', 200)) return bad(res, 400, 'Invalid full_name'); patch.full_name = b.full_name.trim(); }
   if (b.phone !== undefined) patch.phone = String(b.phone).slice(0, 50);
   if (b.role !== undefined) {
-    if (!['student', 'teacher', 'admin'].includes(b.role)) return bad(res, 400, 'Invalid role');
+    if (!['student', 'teacher', 'staff', 'admin'].includes(b.role)) return bad(res, 400, 'Invalid role');
     if (u.id === req.user.id && b.role !== 'admin') return bad(res, 400, 'You cannot remove your own admin role');
     patch.role = b.role;
   }
@@ -615,6 +615,141 @@ app.post('/api/admin/enrolments', auth, roles('admin'), wrap(async (req, res) =>
   const status = req.body.status || 'active';
   if (!['pending', 'active', 'completed', 'cancelled'].includes(status)) return bad(res, 400, 'Invalid status');
   return ok(res, { enrolment: await store.createEnrolment({ student_id: student.id, course_id: course.id, status }) }, 201);
+}));
+
+// --- Staff: student records ---
+// A staff account manages students only: their account, username, password
+// and course enrolments, plus a read-only view of their attendance and work.
+// Teachers, courses, bookings and other staff stay with the admin.
+const staffOnly = roles('staff', 'admin');
+const ENROLMENT_STATUSES = ['pending', 'active', 'completed', 'cancelled'];
+async function staffFindStudent(req, res) {
+  const student = await store.getUser(req.params.id);
+  if (!student || student.role !== 'student') { bad(res, 404, 'Student not found'); return null; }
+  return student;
+}
+app.get('/api/staff/students', auth, staffOnly, wrap(async (req, res) => {
+  const [users, enrolments, courses, submissions] = await Promise.all([
+    store.listUsers(), store.listEnrolmentsAll(), store.listCourses(), store.listSubmissions(null, null)
+  ]);
+  const students = users.filter(u => u.role === 'student').map(u => {
+    const mine = submissions.filter(s => s.student_id === u.id);
+    return {
+      ...publicUser(u),
+      enrolments: enrolments.filter(e => e.student_id === u.id).map(e => ({
+        id: e.id, course_id: e.course_id, status: e.status,
+        course_title: (courses.find(c => c.id === e.course_id) || {}).title_en || null
+      })),
+      submissions_total: mine.length,
+      submissions_ungraded: mine.filter(s => s.grade == null).length
+    };
+  });
+  res.setHeader('Cache-Control', 'private, no-store');
+  return ok(res, { students, courses: courses.map(c => ({ id: c.id, title_en: c.title_en, title_ar: c.title_ar })) });
+}));
+app.get('/api/staff/students/:id', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  const [enrolments, courses, attendance, submissions] = await Promise.all([
+    store.listEnrolmentsForUser(student.id), store.listCourses(),
+    store.listAttendanceForUser(student.id), store.listSubmissionsForStudent(student.id)
+  ]);
+  const title = id => (courses.find(c => c.id === id) || {}).title_en || null;
+  res.setHeader('Cache-Control', 'private, no-store');
+  return ok(res, {
+    student: publicUser(student),
+    courses: courses.map(c => ({ id: c.id, title_en: c.title_en, title_ar: c.title_ar })),
+    enrolments: enrolments.map(e => ({ ...e, course_title: title(e.course_id) })),
+    attendance: attendance.map(a => ({ ...a, course_title: title(a.course_id) })),
+    submissions: submissions.map(s => ({ ...s, course_title: title(s.course_id) }))
+  });
+}));
+app.post('/api/staff/students', auth, staffOnly, wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!isEmail(b.email)) return bad(res, 400, 'Valid email required');
+  if (typeof b.password !== 'string' || b.password.length < 8) return bad(res, 400, 'Password must be at least 8 characters');
+  if (!reqStr(b, 'full_name', 200)) return bad(res, 400, 'full_name required');
+  const username = normaliseUsername(b.username);
+  if (username === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
+  if (await store.findUserByEmail(b.email)) return bad(res, 409, 'Email already registered');
+  if (username && await store.findUserByUsername(username)) return bad(res, 409, 'Username already taken');
+  const student = await store.createUser({
+    email: b.email, username, full_name: b.full_name.trim(),
+    phone: b.phone ? String(b.phone).slice(0, 50) : null,
+    role: 'student', password_hash: await bcrypt.hash(b.password, 10)
+  });
+  let enrolment = null;
+  if (reqStr(b, 'course_id')) {
+    const course = await store.getCourse(b.course_id);
+    if (!course) return bad(res, 404, 'Course not found');
+    const status = ENROLMENT_STATUSES.includes(b.status) ? b.status : 'active';
+    enrolment = await store.createEnrolment({ student_id: student.id, course_id: course.id, status });
+  }
+  return ok(res, { student: publicUser(student), enrolment }, 201);
+}));
+app.put('/api/staff/students/:id', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  const b = req.body || {};
+  const patch = {};
+  if (b.full_name !== undefined) { if (!reqStr(b, 'full_name', 200)) return bad(res, 400, 'Invalid full_name'); patch.full_name = b.full_name.trim(); }
+  if (b.phone !== undefined) patch.phone = b.phone ? String(b.phone).slice(0, 50) : null;
+  if (b.email !== undefined) {
+    if (!isEmail(b.email)) return bad(res, 400, 'Valid email required');
+    const taken = await store.findUserByEmail(b.email);
+    if (taken && taken.id !== student.id) return bad(res, 409, 'Email already registered');
+    patch.email = String(b.email).toLowerCase();
+  }
+  if (b.username !== undefined) {
+    const next = normaliseUsername(b.username);
+    if (next === false) return bad(res, 400, 'username must be 3-30 characters: letters, digits, underscore or dot only');
+    const taken = next ? await store.findUserByUsername(next) : null;
+    if (taken && taken.id !== student.id) return bad(res, 409, 'Username already taken');
+    patch.username = next;
+  }
+  if (!Object.keys(patch).length) return bad(res, 400, 'Nothing to update');
+  return ok(res, { student: publicUser(await store.updateUser(student.id, patch)) });
+}));
+app.post('/api/staff/students/:id/password', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  const password = req.body && req.body.password;
+  if (typeof password !== 'string' || password.length < 8) return bad(res, 400, 'Password must be at least 8 characters');
+  await store.updateUser(student.id, { password_hash: await bcrypt.hash(password, 10) });
+  return ok(res, { updated: true });
+}));
+app.post('/api/staff/students/:id/enrolments', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  if (!reqStr(req.body, 'course_id')) return bad(res, 400, 'course_id required');
+  const course = await store.getCourse(req.body.course_id);
+  if (!course) return bad(res, 404, 'Course not found');
+  const status = req.body.status || 'active';
+  if (!ENROLMENT_STATUSES.includes(status)) return bad(res, 400, 'Invalid status');
+  const existing = await store.getEnrolment(student.id, course.id);
+  if (existing) return ok(res, { enrolment: await store.updateEnrolment(existing.id, status) });
+  return ok(res, { enrolment: await store.createEnrolment({ student_id: student.id, course_id: course.id, status }) }, 201);
+}));
+app.put('/api/staff/students/:id/enrolments/:enrolmentId', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  const status = req.body && req.body.status;
+  if (!ENROLMENT_STATUSES.includes(status)) return bad(res, 400, 'Invalid status');
+  const mine = await store.listEnrolmentsForUser(student.id);
+  if (!mine.some(e => e.id === req.params.enrolmentId)) return bad(res, 404, 'Enrolment not found');
+  return ok(res, { enrolment: await store.updateEnrolment(req.params.enrolmentId, status) });
+}));
+app.delete('/api/staff/students/:id/enrolments/:enrolmentId', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  const mine = await store.listEnrolmentsForUser(student.id);
+  if (!mine.some(e => e.id === req.params.enrolmentId)) return bad(res, 404, 'Enrolment not found');
+  return ok(res, { deleted: await store.deleteEnrolment(req.params.enrolmentId) });
+}));
+app.delete('/api/staff/students/:id', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  return ok(res, { deleted: await store.deleteUser(student.id) });
 }));
 
 app.use((req, res) => bad(res, 404, 'Not found'));

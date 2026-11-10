@@ -104,7 +104,7 @@
         localStorage.setItem('bbc-token', data.token);
         localStorage.setItem('bbc-user', JSON.stringify(data.user));
         var role = (data.user && data.user.role) || 'student';
-        window.location.href = role === 'admin' ? 'dashboard-admin.html' : role === 'teacher' ? 'dashboard-teacher.html' : 'dashboard-student.html';
+        window.location.href = role === 'admin' ? 'dashboard-admin.html' : role === 'teacher' ? 'dashboard-teacher.html' : role === 'staff' ? 'dashboard-staff.html' : 'dashboard-student.html';
       } catch (err) {
         setBusy(loginForm, false);
         errBox(loginForm, t('Login failed: ', 'فشل تسجيل الدخول: ') + err.message);

@@ -432,3 +432,57 @@ test('homework file uploads are type-checked and only served to the class', asyn
   assert.equal((await fetch(`${base}/api/assignment-files/${id}`, { headers: { Authorization: `Bearer ${outsiderToken}` } })).status, 403);
   assert.equal((await fetch(`${base}/api/assignment-files/${id}`)).status, 401);
 });
+
+test('staff create and edit students, and are kept out of admin records', async () => {
+  const admin = await makeUser('admin', 'staffadmin@test.local');
+  const staff = await makeUser('staff', 'staffer@test.local');
+  const teacher = await makeUser('teacher', 'staffteacher@test.local');
+  const student = await makeUser('student', 'staffstudent@test.local');
+  const adminToken = await login(admin.email);
+  const staffToken = await login(staff.email);
+  const studentToken = await login(student.email);
+  const course = await store.createCourse({ slug: 'staff-course', title_en: 'Staff course', is_published: true, teacher_id: teacher.id });
+
+  const created = await call('/api/staff/students', {
+    method: 'POST', token: staffToken,
+    body: { full_name: 'New Learner', email: 'new.learner@test.local', username: 'new.learner', password: 'Learner123!', course_id: course.id, status: 'active' },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.student.role, 'student');
+  assert.equal(created.data.enrolment.status, 'active');
+  assert.ok(!('password_hash' in created.data.student));
+
+  // The username and password set here are the ones that sign in.
+  assert.equal((await call('/api/auth/login', { method: 'POST', body: { username: 'new.learner', password: 'Learner123!' } })).status, 200);
+
+  const id = created.data.student.id;
+  const edited = await call(`/api/staff/students/${id}`, { method: 'PUT', token: staffToken, body: { full_name: 'Renamed Learner', username: 'renamed.learner' } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.data.student.username, 'renamed.learner');
+  assert.equal((await call(`/api/staff/students/${id}/password`, { method: 'POST', token: staffToken, body: { password: 'Changed123!' } })).status, 200);
+  assert.equal((await call('/api/auth/login', { method: 'POST', body: { username: 'renamed.learner', password: 'Changed123!' } })).status, 200);
+
+  const detail = await call(`/api/staff/students/${id}`, { token: staffToken });
+  assert.equal(detail.status, 200);
+  assert.equal(detail.data.enrolments[0].course_title, 'Staff course');
+  assert.deepEqual(detail.data.submissions, []);
+
+  const enrolmentId = detail.data.enrolments[0].id;
+  const updated = await call(`/api/staff/students/${id}/enrolments/${enrolmentId}`, { method: 'PUT', token: staffToken, body: { status: 'completed' } });
+  assert.equal(updated.data.enrolment.status, 'completed');
+  assert.equal((await call(`/api/staff/students/${id}/enrolments/${enrolmentId}`, { method: 'DELETE', token: staffToken })).status, 200);
+
+  // Boundaries: only staff/admin reach student records; staff stay out of admin.
+  assert.equal((await call('/api/staff/students', { token: studentToken })).status, 403);
+  assert.equal((await call('/api/staff/students', { token: await login(teacher.email) })).status, 403);
+  assert.equal((await call('/api/admin/users', { token: staffToken })).status, 403);
+  assert.equal((await call(`/api/staff/students/${teacher.id}`, { method: 'PUT', token: staffToken, body: { full_name: 'Hijack' } })).status, 404);
+
+  // An admin creates staff accounts, and only that role is added.
+  const made = await call('/api/admin/users', { method: 'POST', token: adminToken, body: { full_name: 'Second Staff', email: 'second.staff@test.local', password: 'Password1!', role: 'staff' } });
+  assert.equal(made.status, 201);
+  assert.equal(made.data.user.role, 'staff');
+
+  assert.equal((await call(`/api/staff/students/${id}`, { method: 'DELETE', token: staffToken })).status, 200);
+  assert.equal((await call(`/api/staff/students/${id}`, { token: staffToken })).status, 404);
+});

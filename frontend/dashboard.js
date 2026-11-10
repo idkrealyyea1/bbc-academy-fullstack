@@ -78,6 +78,7 @@
     if (!currentMe) return;
     if (role === 'student') await renderStudent(currentMe);
     else if (role === 'teacher') await renderTeacher(currentMe);
+    else if (role === 'staff') await renderStaff(currentMe);
     else await renderAdmin(currentMe);
     accountCard();
     showView(false);
@@ -362,7 +363,7 @@
       + upload + questions + list;
   }
 
-  function dashFor(r) { return r === 'admin' ? 'dashboard-admin.html' : r === 'teacher' ? 'dashboard-teacher.html' : 'dashboard-student.html'; }
+  function dashFor(r) { return r === 'admin' ? 'dashboard-admin.html' : r === 'teacher' ? 'dashboard-teacher.html' : r === 'staff' ? 'dashboard-staff.html' : 'dashboard-student.html'; }
   function heading(me, note) {
     return '<p class="dash-welcome"><strong>' + h(t('Welcome, ', 'مرحبًا، ') + (me.full_name || '')) + '</strong></p><p class="muted">' + h(note) + '</p>';
   }
@@ -444,7 +445,7 @@
     sec.id = 'view-account';
     sec.dataset.view = 'account';
     sec.hidden = true;
-    var roleLab = { student: t('Student', 'طالب'), teacher: t('Teacher', 'معلم'), admin: t('Admin', 'مسؤول') }[(currentMe || {}).role] || (currentMe || {}).role || '';
+    var roleLab = { student: t('Student', 'طالب'), teacher: t('Teacher', 'معلم'), staff: t('Staff', 'موظف'), admin: t('Admin', 'مسؤول') }[(currentMe || {}).role] || (currentMe || {}).role || '';
     sec.innerHTML = '<h2 class="dash-view-title">' + h(t('Account', 'الحساب')) + '</h2>'
       + (currentMe ? '<div class="card"><h2 class="dash-card-title">' + h(t('Profile', 'الملف الشخصي')) + '</h2><p><strong>' + h(currentMe.full_name || '') + '</strong></p><p class="muted">' + h(currentMe.email || '') + (roleLab ? ' · ' + h(roleLab) : '') + '</p></div>' : '')
       + '<div class="card"><h2 class="dash-card-title">' + h(t('Change password', 'تغيير كلمة المرور')) + '</h2>'
@@ -523,10 +524,11 @@
     if (me.role !== role) { location.replace(dashFor(me.role)); return; }
     currentMe = me;
     var chip = document.getElementById('appUserChip');
-    if (chip) chip.textContent = (me.full_name || me.email || '') + ' · ' + t({ student: 'Student', teacher: 'Teacher', admin: 'Admin' }[me.role] || me.role, { student: 'طالب', teacher: 'معلم', admin: 'مسؤول' }[me.role] || me.role);
+    if (chip) chip.textContent = (me.full_name || me.email || '') + ' · ' + t({ student: 'Student', teacher: 'Teacher', staff: 'Staff', admin: 'Admin' }[me.role] || me.role, { student: 'طالب', teacher: 'معلم', staff: 'موظف', admin: 'مسؤول' }[me.role] || me.role);
     try {
       if (role === 'student') await renderStudent(me);
       else if (role === 'teacher') await renderTeacher(me);
+      else if (role === 'staff') await renderStaff(me);
       else await renderAdmin(me);
     } catch (err) {
       content.innerHTML = '<div class="dash-error"><p>' + h(t('Could not load your workspace. Check your connection and try again.', 'تعذّر تحميل مساحة العمل. تحقق من الاتصال وحاول مجددًا.')) + '</p><p class="muted">' + h(err.message) + '</p><button class="btn small" type="button" id="dashRetry">' + h(t('Retry', 'إعادة المحاولة')) + '</button></div>';
@@ -925,6 +927,233 @@
     });
   }
 
+  // --- Staff: the people who keep student records ---
+  // A staff account adds and edits students, sets usernames and passwords, and
+  // changes their courses. Attendance and homework are shown read-only.
+  async function renderStaff(me) {
+    var data = await api.req('/api/staff/students');
+    var students = data.students || [], courses = data.courses || [];
+    var cmap = {}; courses.forEach(function (c) { cmap[c.id] = c; });
+    function courseTitle(id) { var c = cmap[id]; return c ? (lang === 'ar' ? c.title_ar || c.title_en : c.title_en) : ''; }
+    var ENROL = ['pending', 'active', 'completed', 'cancelled'];
+    function statusLabel(x) {
+      return t({ pending: 'Waiting', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' }[x] || x,
+        { pending: 'بانتظار الموافقة', active: 'نشط', completed: 'مكتمل', cancelled: 'ملغى' }[x] || x);
+    }
+    function courseOptions(selected) {
+      return '<option value="">' + h(t('No course', 'بدون دورة')) + '</option>' + courses.map(function (c) {
+        return '<option value="' + h(c.id) + '"' + (selected === c.id ? ' selected' : '') + '>' + h(lang === 'ar' ? c.title_ar || c.title_en : c.title_en) + '</option>';
+      }).join('');
+    }
+    function statusOptions(selected) {
+      return ENROL.map(function (x) { return '<option value="' + x + '"' + (selected === x ? ' selected' : '') + '>' + h(statusLabel(x)) + '</option>'; }).join('');
+    }
+    var activeCount = 0;
+    students.forEach(function (s) { (s.enrolments || []).forEach(function (e) { if (e.status === 'active') activeCount++; }); });
+    var waiting = students.reduce(function (n, s) { return n + (s.submissions_ungraded || 0); }, 0);
+
+    function staffStudentPage(d) {
+      var s = d.student || {};
+      var enr = d.enrolments || [], att = d.attendance || [], subs = d.submissions || [];
+      var present = att.filter(function (a) { return a.status === 'present'; }).length;
+      var back = '<div class="hw-back-row"><a class="btn small outline" href="#students">' + h(t('Back to students', 'العودة إلى الطلاب')) + '</a></div>';
+      var profile = '<div class="card"><h2 class="dash-card-title">' + h(t('Account details', 'بيانات الحساب')) + '</h2>'
+        + '<form data-staff-profile><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" value="' + h(s.full_name || '') + '" required maxlength="200"></label></div>'
+        + '<div class="field"><label>' + h(t('Username', 'اسم المستخدم')) + ' <input name="username" value="' + h(s.username || '') + '" dir="ltr"><p class="dash-help">' + h(t('3-30 characters: letters, digits, underscore or dot. This is how the student signs in.', '3-30 حرفًا: أحرف وأرقام وشرطة سفلية أو نقطة. يتحقق الطالب بها عند تسجيل الدخول.')) + '</p></label></div>'
+        + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" value="' + h(s.email || '') + '" required dir="ltr"></label></div>'
+        + '<div class="field"><label>' + h(t('Phone', 'الهاتف')) + ' <input name="phone" value="' + h(s.phone || '') + '" dir="ltr"></label></div>'
+        + '<button class="btn small" type="submit">' + h(t('Save details', 'حفظ البيانات')) + '</button></form></div>';
+      var password = '<div class="card"><h2 class="dash-card-title">' + h(t('Set a new password', 'تعيين كلمة مرور جديدة')) + '</h2>'
+        + '<p class="muted">' + h(t('Give the new password to the student yourself; it works at their next login.', 'أعطِ كلمة المرور الجديدة للطالب بنفسك، وتعمل عند تسجيل دخوله القادم.')) + '</p>'
+        + '<form data-staff-password><div class="field"><label>' + h(t('New password (8+ characters)', 'كلمة المرور الجديدة (8 أحرف فأكثر')) + ' <input name="password" type="password" minlength="8" required autocomplete="new-password" dir="ltr"></label></div>'
+        + '<button class="btn small" type="submit">' + h(t('Set password', 'تعيين كلمة المرور')) + '</button></form></div>';
+      var enrol = '<div class="card"><h2 class="dash-card-title">' + h(t('Courses', 'الدورات')) + '</h2>'
+        + (enr.length ? '<div class="dash-row-list">' + enr.map(function (e) {
+          return '<div class="dash-row-card"><div class="dash-row-main"><strong>' + h(e.course_title || courseTitle(e.course_id) || '') + '</strong>'
+            + '<p class="muted small">' + h(t('Enrolled ', 'مسجل ') + String(e.created_at || '').slice(0, 10)) + '</p></div>'
+            + '<div class="dash-row-side"><select data-enrol-status="' + h(e.id) + '" aria-label="' + h(t('Enrolment status', 'حالة التسجيل')) + '">' + statusOptions(e.status) + '</select>'
+            + '<button class="btn small" data-save-enrol="' + h(e.id) + '">' + h(t('Save', 'حفظ')) + '</button>'
+            + '<button class="btn small outline" data-remove-enrol="' + h(e.id) + '">' + h(t('Remove', 'إزالة')) + '</button></div></div>';
+        }).join('') + '</div>' : '<p class="muted">' + h(t('Not enrolled in any course yet.', 'غير مسجل في أي دورة بعد.')) + '</p>')
+        + '<form data-staff-enrol class="dash-section"><div class="dash-form-grid">'
+        + '<div class="field"><label>' + h(t('Add to a course', 'أضف إلى دورة')) + ' <select name="course_id">' + courseOptions() + '</select></label></div>'
+        + '<div class="field"><label>' + h(t('Enrolment status', 'حالة التسجيل')) + ' <select name="status">' + statusOptions('active') + '</select></label></div>'
+        + '</div><button class="btn small" type="submit">' + h(t('Enrol', 'سجّل')) + '</button></form></div>';
+      var activity = '<div class="card"><h2 class="dash-card-title">' + h(t('What they are doing', 'ما يقوم به')) + '</h2>'
+        + '<p>' + h(t('Attendance: ', 'الحضور: ') + present + ' / ' + att.length) + '</p>'
+        + (subs.length ? table([t('Homework', 'الواجب'), t('Course', 'الدورة'), t('Status', 'الحالة'), t('Result', 'النتيجة')], subs.map(function (x) {
+          var result = x.grade != null ? x.grade + ' / 100' : (x.auto_total ? t('Auto ', 'تلقائي ') + x.auto_score + ' / ' + x.auto_total : t('Submitted', 'مُسلَّم'));
+          return '<tr><td>' + h(x.assignment_title || '') + '</td><td>' + h(x.course_title || '') + '</td><td>' + badge(x.grade != null ? 'graded' : 'submitted') + '</td><td>' + h(result) + (x.feedback ? '<br><span class="muted small">' + h(x.feedback) + '</span>' : '') + '</td></tr>';
+        }), '') : '<p class="muted">' + h(t('No homework submitted yet.', 'لم يسلّم أي واجب بعد.')) + '</p>')
+        + '<p class="muted small">' + h(t('Attendance and homework here are read-only; teachers record them.', 'الحضور والواجبات هنا للعرض فقط؛ يسجلها المعلمون.')) + '</p></div>';
+      var danger = '<div class="card"><h2 class="dash-card-title">' + h(t('Remove this student', 'حذف هذا الطالب')) + '</h2>'
+        + '<p class="muted">' + h(t('Deleting removes the account, its enrolments and its work. This cannot be undone.', 'الحذف يزيل الحساب وتسجيلاته وأعماله، ولا يمكن التراجع عنه.')) + '</p>'
+        + '<button class="btn small danger" type="button" data-staff-delete>' + h(t('Delete student', 'حذف الطالب')) + '</button></div>';
+      return back + profile + password + enrol + activity + danger;
+    }
+
+    function wireStaffStudent(d) {
+      var s = d.student;
+      var prof = content.querySelector('[data-staff-profile]');
+      if (prof) prof.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var f = new FormData(prof);
+        try {
+          await api.req('/api/staff/students/' + s.id, { method: 'PUT', body: { full_name: f.get('full_name'), username: f.get('username'), email: f.get('email'), phone: f.get('phone') } });
+          toast(t('Student details saved.', 'تم حفظ بيانات الطالب.'), 'success');
+          refreshCurrent();
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      var pw = content.querySelector('[data-staff-password]');
+      if (pw) pw.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var btn = pw.querySelector('button[type="submit"]');
+        setBusy(btn, true);
+        try {
+          await api.req('/api/staff/students/' + s.id + '/password', { method: 'POST', body: { password: pw.elements.password.value } });
+          pw.reset();
+          toast(t('Password set. Give it to the student.', 'تم تعيين كلمة المرور. أعطها للطالب.'), 'success');
+        } catch (err) { toast(err.message, 'error'); }
+        setBusy(btn, false);
+      });
+      var add = content.querySelector('[data-staff-enrol]');
+      if (add) add.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var f = new FormData(add);
+        if (!f.get('course_id')) { toast(t('Choose a course first.', 'اختر دورة أولًا.'), 'error'); return; }
+        var btn = add.querySelector('button[type="submit"]');
+        setBusy(btn, true);
+        try {
+          await api.req('/api/staff/students/' + s.id + '/enrolments', { method: 'POST', body: { course_id: f.get('course_id'), status: f.get('status') } });
+          toast(t('Course saved.', 'تم حفظ الدورة.'), 'success');
+          refreshCurrent();
+        } catch (err) { toast(err.message, 'error'); setBusy(btn, false); }
+      });
+      content.querySelectorAll('[data-save-enrol]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var id = b.dataset.saveEnrol;
+          var sel = content.querySelector('[data-enrol-status="' + id + '"]');
+          try {
+            await api.req('/api/staff/students/' + s.id + '/enrolments/' + id, { method: 'PUT', body: { status: sel.value } });
+            toast(t('Enrolment saved.', 'تم حفظ التسجيل.'), 'success');
+            refreshCurrent();
+          } catch (err) { toast(err.message, 'error'); }
+        });
+      });
+      content.querySelectorAll('[data-remove-enrol]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          if (!(await confirmDlg('Remove this course from the student?', 'إزالة هذه الدورة من الطالب؟'))) return;
+          try {
+            await api.req('/api/staff/students/' + s.id + '/enrolments/' + b.dataset.removeEnrol, { method: 'DELETE' });
+            toast(t('Course removed.', 'تمت إزالة الدورة.'), 'success');
+            refreshCurrent();
+          } catch (err) { toast(err.message, 'error'); }
+        });
+      });
+      var del = content.querySelector('[data-staff-delete]');
+      if (del) del.addEventListener('click', async function () {
+        if (!(await confirmDlg('Delete this student? Their enrolments and work are removed too.', 'حذف هذا الطالب؟ تُحذف تسجيلاته وأعماله أيضًا.'))) return;
+        setBusy(del, true);
+        try {
+          await api.req('/api/staff/students/' + s.id, { method: 'DELETE' });
+          toast(t('Student deleted.', 'تم حذف الطالب.'), 'success');
+          location.hash = '#students';
+          refreshCurrent();
+        } catch (err) { toast(err.message, 'error'); setBusy(del, false); }
+      });
+    }
+
+    async function fillStaffDetail() {
+      var parts = (location.hash || '').replace(/^#/, '').split('/');
+      if (parts[0] !== 'student') return;
+      var box = document.getElementById('staffStudentDetail');
+      if (!box) return;
+      box.innerHTML = '<div class="card"><p class="muted">' + h(t('Loading the student record…', 'جارٍ تحميل سجل الطالب…')) + '</p></div>';
+      try {
+        var d = await api.req('/api/staff/students/' + encodeURIComponent(parts[1] || ''));
+        box.innerHTML = staffStudentPage(d);
+        wireStaffStudent(d);
+        var ttl = document.getElementById('view-student-title');
+        if (ttl) ttl.textContent = d.student.full_name || t('Student record', 'سجل الطالب');
+        var pt = document.getElementById('appPageTitle'), cr = document.getElementById('appCrumb');
+        if (pt && ttl) pt.textContent = ttl.textContent;
+        if (cr && ttl) cr.textContent = ttl.textContent;
+      } catch (err) {
+        box.innerHTML = '<div class="card"><p class="muted">' + h(err.message) + '</p><a class="btn small outline" href="#students">' + h(t('Back to students', 'العودة إلى الطلاب')) + '</a></div>';
+      }
+    }
+
+    content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Add students, keep their accounts and courses up to date, and follow what they are doing.', 'أضف الطلاب وحدّث حساباتهم ودوراتهم وتابع ما يقومون به.'))
+      + '<div class="dash-statgrid">'
+      + overview('Students', 'الطلاب', students.length, '', '')
+      + overview('Active enrolments', 'تسجيلات نشطة', activeCount, '', '')
+      + overview('Waiting to grade', 'بانتظار التصحيح', waiting, '', '')
+      + overview('Courses', 'الدورات', courses.length, '', '')
+      + '</div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Quick actions', 'إجراءات سريعة')) + '</h2><div class="dash-actions"><a class="btn" href="#students">' + h(t('Add or manage students', 'أضف أو أدر الطلاب')) + '</a></div></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Newest students', 'أحدث الطلاب')) + '</h2>'
+      + (students.length ? '<div class="dash-row-list">' + students.slice(-5).reverse().map(function (s) {
+        return '<div class="dash-row-card"><div class="dash-row-main"><strong>' + h(s.full_name) + '</strong><p class="muted small">' + h(s.username || s.email) + '</p></div>'
+          + '<div class="dash-row-side"><a class="btn small outline" href="#student/' + h(s.id) + '">' + h(t('Open record', 'افتح السجل')) + '</a></div></div>';
+      }).join('') + '</div>' : '<p class="muted">' + h(t('No students yet.', 'لا يوجد طلاب بعد.')) + '</p>') + '</div>')
+      + view('students', 'Students', 'الطلاب', '<div class="dash-filterbar"><label>' + h(t('Search students', 'ابحث في الطلاب')) + ' <input type="search" id="staffStudentSearch" placeholder="' + h(t('Name, username or email', 'الاسم أو اسم المستخدم أو البريد')) + '"></label></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Add a student', 'أضف طالبًا')) + '</h2>'
+      + '<p class="muted">' + h(t('Create the account, choose a username and password, and enrol the student in a course in one step.', 'أنشئ الحساب واختر اسم المستخدم وكلمة المرور وسجّل الطالب في دورة في خطوة واحدة.')) + '</p>'
+      + '<form id="staffCreateStudent"><div class="dash-form-grid">'
+      + '<div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required maxlength="200"></label></div>'
+      + '<div class="field"><label>' + h(t('Username', 'اسم المستخدم')) + ' <input name="username" dir="ltr" placeholder="student.name"></label></div>'
+      + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" required dir="ltr"></label></div>'
+      + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" minlength="8" required autocomplete="new-password" dir="ltr"></label></div>'
+      + '<div class="field"><label>' + h(t('Phone', 'الهاتف')) + ' <input name="phone" dir="ltr"></label></div>'
+      + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id">' + courseOptions() + '</select></label></div>'
+      + '<div class="field"><label>' + h(t('Enrolment status', 'حالة التسجيل')) + ' <select name="status">' + statusOptions('active') + '</select></label></div>'
+      + '</div><button class="btn small" type="submit">' + h(t('Create student', 'إنشاء الطالب')) + '</button></form></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('All students', 'جميع الطلاب')) + '</h2>'
+      + (students.length ? table([t('Student', 'الطالب'), t('Username', 'اسم المستخدم'), t('Courses', 'الدورات'), t('Homework', 'الواجبات'), ''], students.map(function (s) {
+        var coursesText = (s.enrolments || []).map(function (e) { return (e.course_title || courseTitle(e.course_id)) + ' (' + statusLabel(e.status) + ')'; }).join(' · ');
+        var hw = s.submissions_ungraded
+          ? '<span class="badge badge-pending">' + h(t(s.submissions_ungraded + ' to review', s.submissions_ungraded + ' بانتظار التصحيح')) + '</span>'
+          : (s.submissions_total ? String(s.submissions_total) : '—');
+        return '<tr data-search-text="' + h((s.full_name + ' ' + (s.username || '') + ' ' + s.email).toLowerCase()) + '"><td>' + h(s.full_name) + '<br><span class="muted small">' + h(s.email) + '</span></td>'
+          + '<td>' + h(s.username || '—') + '</td><td>' + h(coursesText || '—') + '</td><td>' + hw + '</td>'
+          + '<td><a class="btn small" href="#student/' + h(s.id) + '">' + h(t('Manage', 'إدارة')) + '</a></td></tr>';
+      }), t('No students yet.', 'لا يوجد طلاب بعد.')) : '<div class="dash-empty"><p>' + h(t('No students yet. Add the first one above.', 'لا يوجد طلاب بعد. أضف أول طالب أعلاه.')) + '</p></div>')
+      + '</div>')
+      + view('student', 'Student record', 'سجل الطالب', '<div id="staffStudentDetail"></div>');
+
+    labelTableCells();
+    var search = document.getElementById('staffStudentSearch');
+    if (search) search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      content.querySelectorAll('#view-students [data-search-text]').forEach(function (row) { row.hidden = !!q && row.dataset.searchText.indexOf(q) < 0; });
+    });
+    var createForm = document.getElementById('staffCreateStudent');
+    if (createForm) createForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var f = new FormData(createForm);
+      var btn = createForm.querySelector('button[type="submit"]');
+      setBusy(btn, true);
+      try {
+        await api.req('/api/staff/students', { method: 'POST', body: {
+          full_name: f.get('full_name'), username: f.get('username'), email: f.get('email'),
+          password: f.get('password'), phone: f.get('phone'),
+          course_id: f.get('course_id') || null, status: f.get('status')
+        } });
+        toast(t('Student created.', 'تم إنشاء الطالب.'), 'success');
+        refreshCurrent();
+      } catch (err) { toast(err.message, 'error'); setBusy(btn, false); }
+    });
+    content.querySelectorAll('[data-staff-delete-row]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!(await confirmDlg('Delete this student? Their enrolments and work are removed too.', 'حذف هذا الطالب؟ تُحذف تسجيلاته وأعماله أيضًا.'))) return;
+        try { await api.req('/api/staff/students/' + b.dataset.staffDeleteRow, { method: 'DELETE' }); toast(t('Student deleted.', 'تم حذف الطالب.'), 'success'); refreshCurrent(); }
+        catch (err) { toast(err.message, 'error'); }
+      });
+    });
+    window.__fillDashDetail = fillStaffDetail;
+    fillStaffDetail();
+  }
+
   async function renderAdmin(me) {
     var levels = [];
     try { levels = (await api.req('/api/levels')).levels || []; } catch (e) { levels = []; }
@@ -989,7 +1218,7 @@
       + '<div class="field"><label>' + h(t('Course', 'الدورة')) + ' <select name="course_id"><option value="">' + h(t('No enrolment', 'بدون تسجيل')) + '</option>' + courseOpts + '</select></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create student account', 'إنشاء حساب الطالب')) + '</button></form>'
       + '<div id="adminCreateAccountOk" class="success" hidden></div></div>')
-      + view('people', 'People', 'الأشخاص', '<div class="dash-filterbar"><label>' + h(t('Search people', 'ابحث في الأشخاص')) + ' <input type="search" id="adminPeopleSearch" placeholder="' + h(t('Name, email or username', 'الاسم أو البريد أو اسم المستخدم')) + '"></label><label>' + h(t('Role', 'الدور')) + ' <select id="adminPeopleRole"><option value="">' + h(t('All roles', 'كل الأدوار')) + '</option><option value="student">' + h(t('Student', 'طالب')) + '</option><option value="teacher">' + h(t('Teacher', 'معلم')) + '</option><option value="admin">' + h(t('Admin', 'مسؤول')) + '</option></select></label></div>'
+      + view('people', 'People', 'الأشخاص', '<div class="dash-filterbar"><label>' + h(t('Search people', 'ابحث في الأشخاص')) + ' <input type="search" id="adminPeopleSearch" placeholder="' + h(t('Name, email or username', 'الاسم أو البريد أو اسم المستخدم')) + '"></label><label>' + h(t('Role', 'الدور')) + ' <select id="adminPeopleRole"><option value="">' + h(t('All roles', 'كل الأدوار')) + '</option><option value="student">' + h(t('Student', 'طالب')) + '</option><option value="teacher">' + h(t('Teacher', 'معلم')) + '</option><option value="staff">' + h(t('Staff', 'موظف')) + '</option><option value="admin">' + h(t('Admin', 'مسؤول')) + '</option></select></label></div>'
       + '<div class="card"><h2 class="dash-card-title">' + h(t('Create a teacher', 'إنشاء حساب معلم')) + '</h2>'
       + '<form id="adminCreateTeacherForm"><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required></label></div>'
       + '<div class="field"><label>' + h(t('Username (optional)', 'اسم المستخدم (اختياري)')) + ' <input name="username"></label></div>'
@@ -997,10 +1226,18 @@
       + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
       + '<button class="btn small" type="submit">' + h(t('Create teacher', 'إنشاء معلم')) + '</button></form>'
       + '<div id="adminCreateTeacherOk" class="success" hidden></div></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Create a staff account', 'إنشاء حساب موظف')) + '</h2>'
+      + '<p class="muted">' + h(t('Staff manage student accounts, usernames, passwords and course enrolments. They cannot change courses, teachers or bookings.', 'يدير الموظفون حسابات الطلاب وأسماء المستخدمين وكلمات المرور والتسجيلات، ولا يعدّلون الدورات أو المعلمين أو الطلبات.')) + '</p>'
+      + '<form id="adminCreateStaffForm"><div class="field"><label>' + h(t('Full name', 'الاسم الكامل')) + ' <input name="full_name" required></label></div>'
+      + '<div class="field"><label>' + h(t('Username (optional)', 'اسم المستخدم (اختياري)')) + ' <input name="username"></label></div>'
+      + '<div class="field"><label>' + h(t('Email', 'البريد الإلكتروني')) + ' <input name="email" type="email" required></label></div>'
+      + '<div class="field"><label>' + h(t('Password (8+ characters)', 'كلمة المرور (8 أحرف فأكثر)')) + ' <input name="password" type="password" required minlength="8"></label></div>'
+      + '<button class="btn small" type="submit">' + h(t('Create staff account', 'إنشاء حساب موظف')) + '</button></form>'
+      + '<div id="adminCreateStaffOk" class="success" hidden></div></div>'
       + '<div class="card">'
       + table([t('Name', 'الاسم'), t('Email', 'البريد'), t('Role', 'الدور'), t('New password', 'كلمة مرور جديدة'), ''], users.map(function (u) {
         return '<tr data-search-text="' + h((u.full_name + ' ' + u.email + ' ' + (u.username || '')).toLowerCase()) + '" data-role-row="' + h(u.role) + '"><td>' + h(u.full_name) + '</td><td>' + h(u.email) + '</td>'
-          + '<td><select data-role-for="' + h(u.id) + '">' + ['student', 'teacher', 'admin'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + h(r) + '</option>'; }).join('') + '</select></td>'
+          + '<td><select data-role-for="' + h(u.id) + '">' + ['student', 'teacher', 'staff', 'admin'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + h(r) + '</option>'; }).join('') + '</select></td>'
           + '<td><input type="password" data-pw-for="' + h(u.id) + '" placeholder="' + h(t('8+ characters', '8 أحرف فأكثر')) + '" style="width:150px"></td>'
           + '<td><button class="btn small" data-save-user="' + h(u.id) + '">' + h(t('Save', 'حفظ')) + '</button>' + (u.id === me.id ? '' : ' <button class="btn small outline" data-delete-user="' + h(u.id) + '">' + h(t('Delete', 'حذف')) + '</button>') + '</td></tr>';
       }), t('No users yet.', 'لا يوجد مستخدمون بعد.')) + '</div>')
@@ -1097,6 +1334,21 @@
           form.elements.password.focus();
         }, 0);
       });
+    });
+    var staffForm = document.getElementById('adminCreateStaffForm');
+    if (staffForm) staffForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var sbtn = staffForm.querySelector('button[type="submit"]');
+      setBusy(sbtn, true);
+      try {
+        var created = await api.req('/api/admin/users', { method: 'POST', body: {
+          full_name: staffForm.elements.full_name.value.trim(), username: staffForm.elements.username.value.trim() || null,
+          email: staffForm.elements.email.value.trim(), password: staffForm.elements.password.value, role: 'staff' } });
+        toast(t('Staff account created for ', 'تم إنشاء حساب موظف لـ ') + created.user.email, 'success');
+        var ok = document.getElementById('adminCreateStaffOk');
+        if (ok) { ok.hidden = false; ok.textContent = (lang === 'ar' ? 'تم إنشاء حساب موظف لـ ' : 'Staff account created for ') + created.user.email + ' ✔'; }
+        refreshCurrent();
+      } catch (err) { toast(err.message, 'error'); setBusy(sbtn, false); }
     });
     content.querySelectorAll('[data-save-course]').forEach(function (b) {
       b.addEventListener('click', async function () {
