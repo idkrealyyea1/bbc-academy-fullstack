@@ -134,9 +134,31 @@ The admin confirms a request, then creates the student account — students neve
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
 | GET | `/api/admin/users` | admin | — | `{ users: [...] }` (no password hashes; includes `username`) |
-| POST | `/api/admin/users` | admin | `{ email, password (≥8), full_name, role: "student" \| "teacher" \| "admin", username? }` | 201 `{ user }` |
+| POST | `/api/admin/users` | admin | `{ email, password (≥8), full_name, role: "student" \| "teacher" \| "staff" \| "admin", username? }` | 201 `{ user }` |
 | PUT | `/api/admin/users/:id` | admin | `{ full_name?, phone?, role?, password? (≥8, resets the password), username? (null clears it) }` — an admin cannot remove their own admin role | `{ user }` |
 | POST | `/api/admin/enrolments` | admin | `{ student_id, course_id, status?: "pending" \| "active" \| "completed" \| "cancelled" }` | 201 `{ enrolment }` |
+
+## Staff — student records
+
+A staff account runs student records: creating and editing students, their
+usernames, passwords and course enrolments. Teachers, courses, bookings and
+other accounts stay with the admin. Every route below accepts `staff` or
+`admin`; a student or teacher gets 403.
+
+| Method | Endpoint | Body | Response |
+|---|---|---|---|
+| GET | `/api/staff/students` | — | `{ students: [...], courses: [...] }` — each student carries `enrolments` (with course titles) and submission counts |
+| GET | `/api/staff/students/:id` | — | `{ student, courses, enrolments, attendance, submissions }` (read-only activity) |
+| POST | `/api/staff/students` | `{ full_name, email, password (≥8), username?, phone?, course_id?, status? }` | 201 `{ student, enrolment }` — the role is always `student` |
+| PUT | `/api/staff/students/:id` | `{ full_name?, username? (null clears it), email?, phone? }` — role and password are not editable here | `{ student }` |
+| POST | `/api/staff/students/:id/password` | `{ password (≥8) }` | `{ updated: true }` |
+| POST | `/api/staff/students/:id/enrolments` | `{ course_id, status?: "pending" \| "active" \| "completed" \| "cancelled" }` — an existing enrolment is updated instead of duplicated | 201 `{ enrolment }` |
+| PUT | `/api/staff/students/:id/enrolments/:enrolmentId` | `{ status }` | `{ enrolment }` |
+| DELETE | `/api/staff/students/:id/enrolments/:enrolmentId` | — | `{ deleted: true }` |
+| DELETE | `/api/staff/students/:id` | — | `{ deleted: true }` (account, enrolments and work) |
+
+> Staff accounts are created by an admin (`POST /api/admin/users` with
+> `role: "staff"`), and the role needs `db/migrations/009_staff_role.sql`.
 
 ## Migrations
 
@@ -153,7 +175,7 @@ The admin confirms a booking request and creates the student account here — st
 
 ## Demo accounts (local backend only, `SEED_DEMO`)
 
-`student@demo.local`, `teacher@demo.local`, `admin@demo.local` — all with
+`student@demo.local`, `teacher@demo.local`, `staff@demo.local`, `admin@demo.local` — all with
 password `Demo1234!`. Demo seeding is ON by default when `NODE_ENV` is not
 `production`, and OFF in production unless you set `SEED_DEMO=true`. See
 `docs/DEPLOY.md`.
