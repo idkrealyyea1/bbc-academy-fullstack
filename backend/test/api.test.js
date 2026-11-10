@@ -326,3 +326,109 @@ test('an admin can approve a pending enrolment, a student cannot', async () => {
   const missing = await call('/api/enrolments/no-such-id', { method: 'PUT', token, body: { status: 'active' } });
   assert.equal(missing.status, 404);
 });
+
+test('teacher-built homework questions are marked on the server and the key stays private', async () => {
+  const teacher = await makeUser('teacher', 'hw-teacher@test.local');
+  const student = await makeUser('student', 'hw-student@test.local');
+  const course = await store.createCourse({ slug: 'hw-questions', title_en: 'HW questions', is_published: true, teacher_id: teacher.id });
+  await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'active' });
+  const token = await login(teacher.email);
+  const created = await call('/api/assignments', {
+    method: 'POST',
+    token,
+    body: {
+      course_id: course.id,
+      title: 'Unit 3 homework',
+      questions: [
+        { type: 'multiple_choice', prompt: 'She ___ to school.', options: ['go', 'goes', 'going', 'gone'], correct: 1 },
+        { type: 'fill_blank', prompt: 'I ___ a student.', answers: ['am'] },
+        { type: 'translate', prompt: 'Translate: أنا بخير', answers: ['I am fine', 'I am okay'] },
+        { type: 'short_answer', prompt: 'Write two sentences about your day.' },
+      ],
+    },
+  });
+  assert.equal(created.status, 201);
+  const assignment = created.data.assignment;
+
+  // A student must never receive the answer key.
+  const studentToken = await login(student.email);
+  const list = await call('/api/assignments', { token: studentToken });
+  const mine = list.data.assignments.find(a => a.id === assignment.id);
+  assert.equal(mine.questions.length, 4);
+  assert.equal(mine.questions[0].correct, undefined);
+  assert.equal(mine.questions[1].answers, undefined);
+  assert.equal(mine.questions[0].options.length, 4);
+
+  const submitted = await call('/api/submissions', {
+    method: 'POST',
+    token: studentToken,
+    body: {
+      assignment_id: assignment.id,
+      answers: [
+        { question_id: 'q1', answer: '1' },
+        { question_id: 'q2', answer: '  AM. ' },
+        { question_id: 'q3', answer: 'i am fine!' },
+        { question_id: 'q4', answer: 'I woke up. I studied English.' },
+      ],
+    },
+  });
+  assert.equal(submitted.status, 201);
+  assert.equal(submitted.data.submission.auto_score, 3);
+  assert.equal(submitted.data.submission.auto_total, 3);
+  assert.equal(submitted.data.submission.answers.length, 4);
+
+  const teacherToken = await login(teacher.email);
+  const subs = await call(`/api/submissions?assignment_id=${assignment.id}`, { token: teacherToken });
+  const row = subs.data.submissions.find(s => s.id === submitted.data.submission.id);
+  assert.equal(row.auto_score, 3);
+  assert.equal(row.answers.length, 4);
+
+  // An empty submission is refused; a malformed question list is refused.
+  const empty = await call('/api/submissions', { method: 'POST', token: studentToken, body: { assignment_id: assignment.id, answers: [] } });
+  assert.equal(empty.status, 400);
+  const badQuestion = await call('/api/assignments', {
+    method: 'POST',
+    token,
+    body: { course_id: course.id, title: 'Broken', questions: [{ type: 'multiple_choice', prompt: 'x', options: ['a', 'b'], correct: 5 }] },
+  });
+  assert.equal(badQuestion.status, 400);
+});
+
+test('homework file uploads are type-checked and only served to the class', async () => {
+  const teacher = await makeUser('teacher', 'hw-file-teacher@test.local');
+  const student = await makeUser('student', 'hw-file-student@test.local');
+  const outsider = await makeUser('student', 'hw-file-outsider@test.local');
+  const course = await store.createCourse({ slug: 'hw-files', title_en: 'HW files', is_published: true, teacher_id: teacher.id });
+  await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'active' });
+  const token = await login(teacher.email);
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n');
+
+  const upload = await call('/api/assignments', {
+    method: 'POST',
+    token,
+    body: { course_id: course.id, title: 'Worksheet', file: { name: 'worksheet.pdf', type: 'application/pdf', data: pdf.toString('base64') } },
+  });
+  assert.equal(upload.status, 201);
+  assert.equal(upload.data.assignment.has_file, true);
+
+  // Wrong content with a PDF name is rejected, and nothing is left behind.
+  const fake = await call('/api/assignments', {
+    method: 'POST',
+    token,
+    body: { course_id: course.id, title: 'Not a PDF', file: { name: 'bad.pdf', type: 'application/pdf', data: Buffer.from('<html>nope</html>').toString('base64') } },
+  });
+  assert.equal(fake.status, 400);
+  assert.equal(store.assignments.some(a => a.title === 'Not a PDF'), false);
+
+  const id = upload.data.assignment.id;
+  const studentToken = await login(student.email);
+  const download = await fetch(`${base}/api/assignment-files/${id}`, { headers: { Authorization: `Bearer ${studentToken}` } });
+  assert.equal(download.status, 200);
+  assert.equal(download.headers.get('content-type'), 'application/pdf');
+  assert.match(download.headers.get('cache-control'), /no-store/);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), pdf);
+
+  const outsiderToken = await login(outsider.email);
+  assert.equal((await fetch(`${base}/api/assignment-files/${id}`, { headers: { Authorization: `Bearer ${outsiderToken}` } })).status, 403);
+  assert.equal((await fetch(`${base}/api/assignment-files/${id}`)).status, 401);
+});

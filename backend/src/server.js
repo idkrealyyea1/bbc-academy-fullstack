@@ -16,6 +16,10 @@ const app = express();
 // shares one rate-limit bucket and the API logs a validation error per request.
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.disable('x-powered-by');
+// Homework uploads arrive as base64 JSON on this one route, so it gets a larger
+// body limit. It must be registered BEFORE the global parser, which would
+// otherwise reject the body at 1 MB before this route ever sees it.
+app.post('/api/assignments', express.json({ limit: '6mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -306,13 +310,143 @@ app.post('/api/placement-tests', auth, wrap(async (req, res) => {
 }));
 app.get('/api/placement-tests/me', auth, wrap(async (req, res) => ok(res, { results: await store.listPlacementsForUser(req.user.id) })));
 
+// --- Homework: attachments and questions ---
+// Files are accepted as base64 JSON (no multipart), sniffed by magic bytes,
+// size-capped and served only through the authenticated endpoint below.
+const MAX_HOMEWORK_FILE_BYTES = 2 * 1024 * 1024;
+const HOMEWORK_FILE_SIGNATURES = [
+  { mime: 'application/pdf', ext: 'pdf', magic: [0x25, 0x50, 0x44, 0x46] },
+  { mime: 'image/png', ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47] },
+  { mime: 'image/jpeg', ext: 'jpg', magic: [0xff, 0xd8, 0xff] },
+  { mime: 'image/webp', ext: 'webp', magic: [0x52, 0x49, 0x46, 0x46], check: b => b.toString('latin1', 8, 12) === 'WEBP' },
+];
+const HOMEWORK_QUESTION_TYPES = ['multiple_choice', 'fill_blank', 'translate', 'short_answer'];
+const MAX_HOMEWORK_QUESTIONS = 30;
+
+function safeFileName(name, ext) {
+  const base = String(name || '').split(/[\\/]/).pop()
+    .replace(/[\u0000-\u001f\u007f"'<>]/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!base) return `homework.${ext}`;
+  return new RegExp(`\\.${ext}$`, 'i').test(base) ? base : `${base}.${ext}`;
+}
+
+// Returns { file } , { file: null } or { error }. Trust nothing from the client:
+// the extension, the declared MIME type and the size are all decided here.
+function decodeHomeworkFile(input) {
+  if (input === undefined || input === null) return { file: null };
+  if (typeof input !== 'object' || typeof input.data !== 'string') return { error: 'file.data must be a base64 string' };
+  const b64 = input.data.replace(/\s+/g, '');
+  if (!b64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return { error: 'file.data must be valid base64' };
+  const buf = Buffer.from(b64, 'base64');
+  if (!buf.length) return { error: 'file is empty' };
+  if (buf.length > MAX_HOMEWORK_FILE_BYTES) return { error: 'file must be 2 MB or smaller' };
+  const sig = HOMEWORK_FILE_SIGNATURES.find(t => t.magic.every((b, i) => buf[i] === b) && (!t.check || t.check(buf)));
+  if (!sig) return { error: 'only PDF, PNG, JPEG or WebP files are allowed' };
+  return { file: { filename: safeFileName(input.name, sig.ext), mime_type: sig.mime, byte_size: buf.length, data: buf } };
+}
+
+// Questions are stored whole (with answers) and stripped before a student sees
+// them. Returns null when the payload is not a valid question list.
+function normaliseQuestions(raw) {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_HOMEWORK_QUESTIONS) return null;
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    const q = raw[i];
+    if (!q || typeof q !== 'object') return null;
+    const type = q.type;
+    const prompt = typeof q.prompt === 'string' ? q.prompt.trim() : '';
+    if (!HOMEWORK_QUESTION_TYPES.includes(type) || !prompt || prompt.length > 1000) return null;
+    const base = { id: `q${i + 1}`, type, prompt };
+    if (type === 'multiple_choice') {
+      const options = Array.isArray(q.options) ? q.options.map(o => (typeof o === 'string' ? o.trim() : '')) : [];
+      if (options.length < 2 || options.length > 6 || options.some(o => !o || o.length > 300)) return null;
+      const correct = Number(q.correct);
+      if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) return null;
+      out.push({ ...base, options, correct });
+    } else if (type === 'fill_blank' || type === 'translate') {
+      const answers = (Array.isArray(q.answers) ? q.answers : [])
+        .map(a => (typeof a === 'string' ? a.trim() : ''))
+        .filter(a => a && a.length <= 500);
+      const unique = answers.filter((a, idx) => answers.findIndex(b => b.toLowerCase() === a.toLowerCase()) === idx);
+      if (!unique.length || unique.length > 6) return null;
+      out.push({ ...base, answers: unique });
+    } else {
+      out.push(base);
+    }
+  }
+  return out;
+}
+
+function studentQuestions(questions) {
+  return (questions || []).map(q => {
+    if (q.type === 'multiple_choice') return { id: q.id, type: q.type, prompt: q.prompt, options: q.options };
+    return { id: q.id, type: q.type, prompt: q.prompt };
+  });
+}
+
+// Marking is forgiving on case, spacing and punctuation, strict on wording.
+function normaliseAnswerText(v) {
+  return String(v == null ? '' : v).toLowerCase()
+    .replace(/[’‘]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[.,!?;:]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Auto-marks the objective question types (choose / complete / translate).
+// Short answers are left for the teacher; the total only counts marked ones.
+function markHomeworkAnswers(questions, answers) {
+  const given = new Map();
+  (answers || []).forEach(a => { if (a && typeof a.question_id === 'string') given.set(a.question_id, typeof a.answer === 'string' ? a.answer.trim() : ''); });
+  let score = 0, total = 0;
+  const lines = [];
+  const stored = [];
+  questions.forEach((q, i) => {
+    const raw = given.get(q.id) || '';
+    stored.push({ question_id: q.id, answer: raw });
+    const label = `Q${i + 1}. ${q.prompt}`;
+    if (q.type === 'multiple_choice') {
+      total++;
+      const idx = Number(raw);
+      if (Number.isInteger(idx) && idx === q.correct) score++;
+      lines.push(`${label} → ${Number.isInteger(idx) && q.options[idx] ? q.options[idx] : '(no answer)'}`);
+    } else if (q.type === 'fill_blank' || q.type === 'translate') {
+      total++;
+      const got = normaliseAnswerText(raw);
+      if (got && q.answers.some(a => normaliseAnswerText(a) === got)) score++;
+      lines.push(`${label} → ${raw || '(no answer)'}`);
+    } else {
+      lines.push(`${label} → ${raw || '(no answer)'}`);
+    }
+  });
+  return { answers: stored, score, total, summary: lines.join('\n') };
+}
+
 // --- Assignments / submissions / grades ---
 app.post('/api/assignments', auth, roles('admin', 'teacher'), wrap(async (req, res) => {
   if (!reqStr(req.body, 'course_id') || !reqStr(req.body, 'title', 300)) return bad(res, 400, 'course_id and title required');
   const course = await store.getCourse(req.body.course_id);
   if (!course) return bad(res, 404, 'Course not found');
   if (!canManageCourse(req.user, course)) return bad(res, 403, 'You can only add assignments to your own courses');
-  return ok(res, { assignment: await store.createAssignment({ course_id: course.id, teacher_id: req.user.id, title: req.body.title.trim(), description: req.body.description || null, due_date: req.body.due_date || null }) }, 201);
+  const questions = normaliseQuestions(req.body.questions);
+  if (questions === null) return bad(res, 400, 'questions must be a valid list (max 30) of choose, complete, translate or short-answer questions');
+  const decoded = decodeHomeworkFile(req.body.file);
+  if (decoded.error) return bad(res, 400, decoded.error);
+  const assignment = await store.createAssignment({
+    course_id: course.id, teacher_id: req.user.id, title: req.body.title.trim(),
+    description: req.body.description || null, due_date: req.body.due_date || null, questions,
+  });
+  if (decoded.file) {
+    try {
+      await store.attachAssignmentFile({ assignment_id: assignment.id, ...decoded.file });
+    } catch (err) {
+      // Never leave an assignment behind that claims homework the student cannot open.
+      await store.deleteAssignment(assignment.id);
+      throw err;
+    }
+    assignment.has_file = true;
+  }
+  return ok(res, { assignment }, 201);
 }));
 app.get('/api/assignments', auth, wrap(async (req, res) => {
   const courseId = req.query.course_id || null;
@@ -321,15 +455,49 @@ app.get('/api/assignments', auth, wrap(async (req, res) => {
   else if (req.user.role === 'teacher') list = await store.listAssignmentsForTeacher(req.user.id);
   else list = await store.listAssignmentsForStudent(req.user.id);
   if (courseId && req.user.role !== 'admin') list = list.filter(a => a.course_id === courseId);
+  // Answers must never reach a student's browser.
+  if (req.user.role === 'student') list = list.map(a => ({ ...a, questions: studentQuestions(a.questions) }));
   return ok(res, { assignments: list });
 }));
+// The only way to read an uploaded homework file: role and enrolment checked.
+app.get('/api/assignment-files/:assignmentId', auth, wrap(async (req, res) => {
+  const assignment = await store.getAssignment(req.params.assignmentId);
+  if (!assignment) return bad(res, 404, 'Assignment not found');
+  const allowed = req.user.role === 'admin'
+    || (req.user.role === 'teacher' && assignment.teacher_id === req.user.id)
+    || (req.user.role === 'student' && await store.isEnrolled(req.user.id, assignment.course_id));
+  if (!allowed) return bad(res, 403, 'You do not have access to this homework');
+  const file = await store.getAssignmentFile(assignment.id);
+  if (!file) return bad(res, 404, 'No file attached to this assignment');
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('Content-Length', String(file.byte_size));
+  res.setHeader('Content-Disposition', `inline; filename="${String(file.filename).replace(/"/g, '')}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(file.data);
+}));
 app.post('/api/submissions', auth, roles('student'), wrap(async (req, res) => {
-  if (!reqStr(req.body, 'assignment_id') || (!reqStr(req.body, 'content_text', 5000) && !reqStr(req.body, 'content_url', 1000))) return bad(res, 400, 'assignment_id and content_text or content_url required');
+  if (!reqStr(req.body, 'assignment_id')) return bad(res, 400, 'assignment_id required');
   const assignment = await store.getAssignment(req.body.assignment_id);
   if (!assignment) return bad(res, 404, 'Assignment not found');
   if (!(await store.isEnrolled(req.user.id, assignment.course_id))) return bad(res, 403, 'You are not enrolled in this course');
+  const questions = Array.isArray(assignment.questions) ? assignment.questions : [];
+  let payload;
+  if (questions.length) {
+    if (!Array.isArray(req.body.answers)) return bad(res, 400, 'answers must be an array');
+    const known = new Set(questions.map(q => q.id));
+    for (const a of req.body.answers) {
+      if (!a || typeof a.question_id !== 'string' || !known.has(a.question_id)) return bad(res, 400, 'answers must reference the questions of this assignment');
+      if (a.answer != null && (typeof a.answer !== 'string' || a.answer.length > 5000)) return bad(res, 400, 'each answer must be text (max 5000 characters)');
+    }
+    const marked = markHomeworkAnswers(questions, req.body.answers);
+    if (!marked.answers.some(a => a.answer)) return bad(res, 400, 'Answer at least one question before submitting');
+    payload = { content_text: marked.summary, content_url: null, answers: marked.answers, auto_score: marked.score, auto_total: marked.total };
+  } else {
+    if (!reqStr(req.body, 'content_text', 5000) && !reqStr(req.body, 'content_url', 1000)) return bad(res, 400, 'content_text or content_url required');
+    payload = { content_text: req.body.content_text || null, content_url: req.body.content_url || null };
+  }
   // 201 the first time, 200 when the student revises an existing answer.
-  const submission = await store.createSubmission({ assignment_id: assignment.id, student_id: req.user.id, content_text: req.body.content_text || null, content_url: req.body.content_url || null });
+  const submission = await store.createSubmission({ assignment_id: assignment.id, student_id: req.user.id, ...payload });
   const created = submission.created !== false;
   delete submission.created;
   return ok(res, { submission }, created ? 201 : 200);
@@ -456,6 +624,7 @@ app.use((err, req, res, next) => {
   if (res.statusCode === 500) console.error('ERR', err.message);
   if (err.message === 'CORS origin not allowed') return bad(res, 403, 'Origin not allowed');
   if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) return bad(res, 400, 'Invalid JSON body');
+  if (err.type === 'entity.too.large') return bad(res, 413, 'Request body is too large (homework files must be 2 MB or smaller)');
   if (err.code === '23505') return bad(res, 409, 'Already exists');
   if (err.code === '23503') return bad(res, 400, 'Related record not found');
   if (err.code === '22P02') return bad(res, 400, 'Invalid id');
