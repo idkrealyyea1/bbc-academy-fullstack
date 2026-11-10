@@ -139,8 +139,8 @@
     link.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
   }
-  function bindHomeworkFileButtons() {
-    content.querySelectorAll('[data-hw-file]').forEach(function (b) {
+  function bindHomeworkFileButtons(scope) {
+    (scope || content).querySelectorAll('[data-hw-file]').forEach(function (b) {
       b.addEventListener('click', async function () {
         setBusy(b, true);
         try { await openHomeworkFile(b.dataset.hwFile, b.dataset.hwName); }
@@ -228,7 +228,35 @@
       return { type: type, prompt: prompt };
     });
   }
-  function studentHomeworkBlock(a) {
+  function hwStatusOf(a) {
+    return !a.submission ? 'pending' : (a.submission.grade != null ? 'graded' : 'submitted');
+  }
+  function hwStatusChip(a) {
+    var st = hwStatusOf(a);
+    var label = st === 'pending' ? t('Not submitted', 'لم يُسلَّم')
+      : st === 'graded' ? t('Graded', 'مصححة') + ': ' + a.submission.grade + ' / 100'
+        : t('Submitted', 'تم التسليم');
+    return '<span class="badge badge-' + st + '">' + h(label) + '</span>';
+  }
+  function hwAutoNote(a) {
+    return a.submission && a.submission.auto_total
+      ? '<p class="muted small">' + h(t('Auto-marked: ', 'التصحيح التلقائي: ') + a.submission.auto_score + ' / ' + a.submission.auto_total + t('. Your teacher confirms the final grade.', '. درجتك النهائية يحددها معلمك.')) + '</p>'
+      : '';
+  }
+  // The student's own answers, with a choice shown as the option text.
+  function hwAnswerList(a) {
+    var answers = (a.submission && a.submission.answers) || [];
+    if (!answers.length) return '';
+    var qs = a.questions || [];
+    return '<ol class="hw-answer-list">' + answers.map(function (x) {
+      var q = qs.filter(function (y) { return y.id === x.question_id; })[0];
+      var shown = x.answer || '—';
+      if (q && q.type === 'multiple_choice' && /^\d+$/.test(String(x.answer))) shown = (q.options || [])[Number(x.answer)] || shown;
+      return '<li>' + h(shown) + '</li>';
+    }).join('') + '</ol>';
+  }
+  // Question controls (or the written-answer box) for one assignment.
+  function hwAnswerFields(a) {
     var qs = a.questions || [];
     var mine = (a.submission && a.submission.answers) || [];
     function previous(qid) {
@@ -256,21 +284,47 @@
       fields = (a.has_file ? '<p class="muted">' + h(t('Do the homework in the file, then write your answer here.', 'حل الواجب في الملف ثم اكتب إجابتك هنا.')) + '</p>' : '')
         + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea rows="3" maxlength="5000" data-hw-text required></textarea></label></div>';
     }
-    var status = !a.submission
-      ? '<span class="badge badge-pending">' + h(t('Not submitted', 'لم يُسلَّم')) + '</span>'
-      : (a.submission.grade != null
-        ? '<span class="badge badge-graded">' + h(t('Graded', 'مصححة') + ': ' + a.submission.grade + ' / 100') + '</span>'
-        : '<span class="badge badge-submitted">' + h(t('Submitted', 'تم التسليم')) + '</span>');
-    var auto = a.submission && a.submission.auto_total
-      ? '<p class="muted small">' + h(t('Auto-marked: ', 'التصحيح التلقائي: ') + a.submission.auto_score + ' / ' + a.submission.auto_total + t('. Your teacher confirms the final grade.', '. درجتك النهائية يحددها معلمك.')) + '</p>'
-      : '';
-    return '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">'
-      + '<div class="hw-block-head"><div><h3 class="hw-block-title">' + h(a.title) + '</h3>'
-      + '<p class="muted small">' + h(hwKindLabel(a)) + (a.due_date ? ' · ' + h(t('Due ', 'التسليم ') + a.due_date) : '') + '</p></div>' + status + '</div>'
-      + (a.has_file ? '<p>' + hwFileButton(a) + '</p>' : '')
-      + fields + auto
-      + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button>'
-      + '</form>';
+    return fields;
+  }
+  // One place binds the submit handlers for every homework form on the page,
+  // including the forms rendered inside an opened homework.
+  function bindHomeworkForms(root, asg) {
+    root.querySelectorAll('[data-hw-form]').forEach(function (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var id = form.dataset.hwForm;
+        var assignment = null;
+        asg.forEach(function (a) { if (a.id === id) assignment = a; });
+        if (!assignment) return;
+        var body;
+        if ((assignment.questions || []).length) {
+          var answers = assignment.questions.map(function (q) {
+            var value = '';
+            if (q.type === 'multiple_choice') {
+              var checked = form.querySelector('input[name="ans_' + id + '_' + q.id + '"]:checked');
+              value = checked ? checked.value : '';
+            } else {
+              var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
+              value = input ? input.value.trim() : '';
+            }
+            return { question_id: q.id, answer: value };
+          });
+          if (!answers.some(function (x) { return x.answer; })) { toast(t('Answer at least one question.', 'أجب عن سؤال واحد على الأقل.'), 'error'); return; }
+          body = { assignment_id: id, answers: answers };
+        } else {
+          var text = form.querySelector('[data-hw-text]');
+          if (!text || !text.value.trim()) { toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error'); return; }
+          body = { assignment_id: id, content_text: text.value.trim() };
+        }
+        var sbtn = form.querySelector('button[type="submit"]');
+        setBusy(sbtn, true);
+        try {
+          await api.req('/api/submissions', { method: 'POST', body: body });
+          toast(t('Homework submitted.', 'تم تسليم الواجب.'), 'success');
+          refreshCurrent();
+        } catch (err) { toast(err.message, 'error'); setBusy(sbtn, false); }
+      });
+    });
   }
 
   // Teacher side: one section, two ways to build the same homework.
@@ -321,12 +375,13 @@
   function showView(focusIt) {
     var views = Array.prototype.slice.call(content.querySelectorAll('.dash-view'));
     if (!views.length) return;
+    // A route may carry an id: #perform/<assignmentId> opens a detail view.
     var hash = (location.hash || '').replace(/^#/, '');
+    var route = hash.split('/')[0];
     var target = null;
-    for (var i = 0; i < views.length; i++) { if (views[i].dataset.view === hash) { target = views[i]; break; } }
+    for (var i = 0; i < views.length; i++) { if (views[i].dataset.view === route) { target = views[i]; break; } }
     if (!target) target = views[0];
-    views.forEach(function (v) { v.hidden = (v !== target); });
-    var nav = document.getElementById('dashNav');
+    views.forEach(function (v) { v.hidden = (v !== target); });    var nav = document.getElementById('dashNav');
     if (nav) nav.querySelectorAll('a').forEach(function (a) {
       var isActive = a.getAttribute('href') === '#' + target.dataset.view;
       a.classList.toggle('active', isActive);
@@ -371,7 +426,11 @@
       localStorage.removeItem('bbc-user');
       location.href = 'index.html';
     });
-    window.addEventListener('hashchange', function () { closeMenu(false); showView(true); });
+    window.addEventListener('hashchange', function () {
+      closeMenu(false);
+      if (window.__fillDashDetail) window.__fillDashDetail();
+      showView(true);
+    });
   }
   wireDashChrome();
 
@@ -494,8 +553,83 @@
     var present = att.filter(function (a) { return a.status === 'present'; }).length;
     var graded = asg.filter(function (a) { return a.submission && a.submission.grade != null; }).length;
     var openAsg = asg.filter(function (a) { return !a.submission; });
-    // Homework the student can still work on (or revise until it is graded).
-    var todoAsg = asg.filter(function (a) { return !a.submission || a.submission.grade == null; });
+    var courseTitle = function (id) { var c = cmap[id]; return c ? (lang === 'ar' ? c.title_ar || c.title_en : c.title_en) : ''; };
+    function hwMeta(a) {
+      return hwKindLabel(a) + (a.due_date ? ' · ' + t('Due ', 'التسليم ') + a.due_date : '');
+    }
+    // One homework as a row in a list: title, its info, status, and the way in.
+    function hwRow(a) {
+      var st = hwStatusOf(a);
+      return '<div class="dash-row-card" data-hw-status="' + st + '"><div class="dash-row-main"><strong>' + h(a.title) + '</strong>'
+        + '<p class="muted small">' + h(courseTitle(a.course_id)) + ' · ' + h(hwMeta(a)) + '</p></div>'
+        + '<div class="dash-row-side">' + hwStatusChip(a)
+        + '<a class="btn small" href="#perform/' + h(a.id) + '">' + h(st === 'graded' ? t('Review homework', 'مراجعة الواجب') : t('Perform homework', 'أداء الواجب')) + '</a></div></div>';
+    }
+    function backLink(hash, en, ar) {
+      return '<a class="btn small outline" href="#' + hash + '">' + h(t(en, ar)) + '</a>';
+    }
+    function lessonPage(l) {
+      var n = lessons.indexOf(l) + 1;
+      var links = [];
+      if (l.content_url) links.push('<a class="btn small" href="' + h(l.content_url) + '" target="_blank" rel="noopener">' + h(t('Open lesson content', 'افتح محتوى الدرس')) + '</a>');
+      if (l.material_url) links.push('<a class="btn small outline" href="' + h(l.material_url) + '" target="_blank" rel="noopener">' + h(t('Open the material', 'افتح المادة')) + '</a>');
+      if (l.live_class_url) links.push('<a class="btn small outline" href="' + h(l.live_class_url) + '" target="_blank" rel="noopener">' + h(t('Join the live class', 'انضم إلى الحصة المباشرة')) + '</a>');
+      var hw = asg.filter(function (a) { return String(a.course_id) === String(l.course_id); });
+      return backLink('lessons', 'Back to lessons', 'العودة إلى الدروس')
+        + '<div class="card"><div class="hw-block-head"><div><h3 class="hw-block-title">' + h(lang === 'ar' ? l.title_ar || l.title_en : l.title_en) + '</h3>'
+        + '<p class="muted small">' + h(courseTitle(l.course_id)) + ' · ' + h(t('Lesson ', 'الدرس ') + (l.order_no || n)) + '</p></div></div>'
+        + (links.length
+          ? '<div class="hw-page-actions">' + links.join('') + '</div>'
+          : '<p class="muted">' + h(t('Your teacher has not added content to this lesson yet.', 'لم يضف معلمك محتوى لهذا الدرس بعد.')) + '</p>')
+        + '</div>'
+        + '<div class="card"><h2 class="dash-card-title">' + h(t('Homework for this course', 'واجبات هذه الدورة')) + '</h2>'
+        + (hw.length
+          ? '<div class="dash-row-list">' + hw.map(hwRow).join('') + '</div>'
+          : '<p class="muted">' + h(t('No homework for this course yet.', 'لا توجد واجبات لهذه الدورة بعد.')) + '</p>')
+        + '</div>';
+    }
+    // The homework itself: the form to perform it, or the marked work after.
+    function performPage(a) {
+      var head = '<div class="hw-block-head"><div><h3 class="hw-block-title">' + h(a.title) + '</h3>'
+        + '<p class="muted small">' + h(courseTitle(a.course_id)) + ' · ' + h(hwMeta(a)) + '</p></div>' + hwStatusChip(a) + '</div>';
+      var back = '<div class="hw-back-row">' + backLink('homework', 'Back to homework', 'العودة إلى الواجبات') + backLink('lessons', 'Back to lessons', 'العودة إلى الدروس') + '</div>';
+      if (hwStatusOf(a) === 'graded') {
+        var mine = hwAnswerList(a);
+        var written = !mine && a.submission.content_text ? '<p class="hw-answer-text">' + h(a.submission.content_text) + '</p>' : '';
+        return back + '<div class="card">' + head
+          + (a.submission.feedback ? '<p><strong>' + h(t('Teacher feedback', 'ملاحظات المعلم')) + ':</strong> ' + h(a.submission.feedback) + '</p>' : '')
+          + hwAutoNote(a)
+          + '<h2 class="dash-card-title">' + h(t('Your answers', 'إجاباتك')) + '</h2>'
+          + (mine || written || '<p class="muted">—</p>')
+          + '</div>';
+      }
+      return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head
+        + (a.has_file ? '<p>' + hwFileButton(a) + '</p>' : '')
+        + hwAnswerFields(a) + hwAutoNote(a)
+        + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button></form>';
+    }
+    function fillDetail() {
+      var parts = (location.hash || '').replace(/^#/, '').split('/');
+      var id = parts[1] || '';
+      if (parts[0] === 'lesson') {
+        var l = lessons.filter(function (x) { return String(x.id) === id; })[0];
+        var box = document.getElementById('studentLessonDetail');
+        var ttl = document.getElementById('view-lesson-title');
+        if (box) box.innerHTML = l ? lessonPage(l) : '<div class="card"><p class="muted">' + h(t('This lesson is not available.', 'هذا الدرس غير متاح.')) + '</p></div>';
+        if (ttl) ttl.textContent = l ? (lang === 'ar' ? l.title_ar || l.title_en : l.title_en) : t('Lesson', 'الدرس');
+        if (box) bindHomeworkFileButtons(box);
+      } else if (parts[0] === 'perform') {
+        var a = asg.filter(function (x) { return String(x.id) === id; })[0];
+        var pbox = document.getElementById('studentHomeworkDetail');
+        var pttl = document.getElementById('view-perform-title');
+        if (pbox) {
+          pbox.innerHTML = a ? performPage(a) : '<div class="card"><p class="muted">' + h(t('This homework is not available.', 'هذا الواجب غير متاح.')) + '</p></div>';
+          bindHomeworkFileButtons(pbox);
+          bindHomeworkForms(pbox, asg);
+        }
+        if (pttl) pttl.textContent = a ? a.title : t('Homework', 'الواجب');
+      }
+    }
     content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading(me, t('Your course, progress and homework in one place.', 'دورتك وتقدمك وواجباتك في مكان واحد.'))
       + '<div class="dash-statgrid">'
       + overview('My courses', 'دوراتي', enr.length, 'enrolments', 'تسجيل')
@@ -530,22 +664,23 @@
       }), t('No grades returned yet.', 'لا توجد درجات بعد.')) + '</div>')
       + view('homework', 'Homework', 'الواجبات', '<div class="card"><div class="dash-tabs" role="tablist">'
       + ['all', 'pending', 'submitted', 'graded'].map(function (s) { return '<button type="button" data-hw-tab="' + s + '" class="' + (s === 'all' ? 'active' : '') + '">' + h(s === 'all' ? t('All', 'الكل') : s === 'pending' ? t('Pending', 'بانتظار التسليم') : s === 'submitted' ? t('Submitted', 'مُسلَّمة') : t('Graded', 'مصححة')) + '</button>'; }).join('') + '</div>'
-      + table([t('Task', 'المهمة'), t('Course', 'الدورة'), t('Status', 'الحالة'), t('Feedback', 'ملاحظات')], asg.map(function (a) {
-        var c = cmap[a.course_id];
-        var st = !a.submission ? 'pending' : (a.submission.grade != null ? 'graded' : 'submitted');
-        var status = !a.submission ? t('Not submitted', 'لم يُسلَّم') : (a.submission.grade != null ? a.submission.grade + ' / 100' : t('Submitted', 'تم التسليم'));
-        return '<tr data-hw-status="' + st + '"><td>' + h(a.title) + '</td><td>' + h(c ? c.title_en : '') + '</td><td>' + badge(st) + ' ' + h(status) + '</td><td>' + h(a.submission && a.submission.feedback ? a.submission.feedback : '') + '</td></tr>';
-      }), t('No homework yet.', 'لا توجد واجبات بعد.'))
-      + '</div>'
-      + (todoAsg.length
-        ? '<h2 class="dash-view-title">' + h(t('Your homework', 'واجبك')) + '</h2>' + todoAsg.map(studentHomeworkBlock).join('')
-        : ''))
+      + '<p class="muted">' + h(t('Pick a homework to perform it. The questions open on their own page.', 'اختر واجبًا لأدائه. تُفتح الأسئلة في صفحة خاصة.')) + '</p>'
+      + (asg.length
+        ? '<div class="dash-row-list">' + asg.map(hwRow).join('') + '</div>'
+        : '<div class="dash-empty"><p>' + h(t('No homework yet.', 'لا توجد واجبات بعد.')) + '</p></div>')
+      + '</div>')
       + view('lessons', 'Lessons', 'الدروس', '<div class="card">'
-      + table([t('Lesson', 'الدرس'), t('Course', 'الدورة'), ''], lessons.map(function (l) {
-        var c = cmap[l.course_id];
-        var join = l.live_class_url ? '<a class="btn small" href="' + h(l.live_class_url) + '" target="_blank" rel="noopener">' + h(t('Join', 'انضم')) + '</a>' : '';
-        return '<tr><td>' + h(l.title_en) + '</td><td>' + h(c ? c.title_en : '') + '</td><td>' + join + '</td></tr>';
-      }), t('No lessons yet.', 'لا توجد دروس بعد.')) + '</div>')
+      + '<p class="muted">' + h(t('Open a lesson to see its material and the homework for its course.', 'افتح درسًا لترى مادته وواجبات دورته.')) + '</p>'
+      + (lessons.length
+        ? '<div class="dash-row-list">' + lessons.map(function (l, i) {
+          return '<div class="dash-row-card"><div class="dash-row-main"><strong>' + h(lang === 'ar' ? l.title_ar || l.title_en : l.title_en) + '</strong>'
+            + '<p class="muted small">' + h(courseTitle(l.course_id)) + ' · ' + h(t('Lesson ', 'الدرس ') + (l.order_no || i + 1)) + '</p></div>'
+            + '<div class="dash-row-side"><a class="btn small" href="#lesson/' + h(l.id) + '">' + h(t('Open this lesson', 'افتح هذا الدرس')) + '</a></div></div>';
+        }).join('') + '</div>'
+        : '<div class="dash-empty"><p>' + h(t('No lessons yet.', 'لا توجد دروس بعد.')) + '</p></div>')
+      + '</div>')
+      + view('lesson', 'Lesson', 'الدرس', '<div id="studentLessonDetail"></div>')
+      + view('perform', 'Homework', 'الواجب', '<div id="studentHomeworkDetail"></div>')
       + view('announcements', 'Announcements', 'الإعلانات', '<div class="card">'
       + (ann.length ? ann.slice(0, 5).map(function (a) {
         return '<p><strong>' + h(a.title) + '</strong><br><span class="muted">' + h(a.body).replace(/\n/g, '<br>') + '</span></p>';
@@ -560,42 +695,11 @@
       });
     });
     bindHomeworkFileButtons();
-    content.querySelectorAll('[data-hw-form]').forEach(function (form) {
-      form.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        var id = form.dataset.hwForm;
-        var assignment = null;
-        asg.forEach(function (a) { if (a.id === id) assignment = a; });
-        if (!assignment) return;
-        var body;
-        if ((assignment.questions || []).length) {
-          var answers = assignment.questions.map(function (q) {
-            var value = '';
-            if (q.type === 'multiple_choice') {
-              var checked = form.querySelector('input[name="ans_' + id + '_' + q.id + '"]:checked');
-              value = checked ? checked.value : '';
-            } else {
-              var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
-              value = input ? input.value.trim() : '';
-            }
-            return { question_id: q.id, answer: value };
-          });
-          if (!answers.some(function (x) { return x.answer; })) { toast(t('Answer at least one question.', 'أجب عن سؤال واحد على الأقل.'), 'error'); return; }
-          body = { assignment_id: id, answers: answers };
-        } else {
-          var text = form.querySelector('[data-hw-text]');
-          if (!text || !text.value.trim()) { toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error'); return; }
-          body = { assignment_id: id, content_text: text.value.trim() };
-        }
-        var sbtn = form.querySelector('button[type="submit"]');
-        setBusy(sbtn, true);
-        try {
-          await api.req('/api/submissions', { method: 'POST', body: body });
-          toast(t('Homework submitted.', 'تم تسليم الواجب.'), 'success');
-          refreshCurrent();
-        } catch (err) { toast(err.message, 'error'); setBusy(sbtn, false); }
-      });
-    });
+    bindHomeworkForms(content, asg);
+    // Detail views (#lesson/<id>, #perform/<id>) are filled from the data this
+    // dashboard already loaded, and refilled on every hash change.
+    window.__fillDashDetail = fillDetail;
+    fillDetail();
   }
 
   async function renderTeacher(me) {
