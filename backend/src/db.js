@@ -96,6 +96,12 @@ class MemoryStore {
     this.grades = this.grades.filter(g => !gone.has(g.submission_id));
     return true;
   }
+  async updateAssignment(id, patch) {
+    const a = this.assignments.find(x => x.id === id);
+    if (!a) return null;
+    Object.assign(a, patch);
+    return this.assignView(a);
+  }
   // Files are metadata in list responses; the bytes are only read by the
   // download endpoint, so keep them out of every listing.
   assignView(a) { return { ...a, questions: a.questions || [], has_file: this.assignmentFiles.has(a.id) }; }
@@ -131,6 +137,7 @@ class MemoryStore {
       existing.answers = s.answers || [];
       existing.auto_score = s.auto_score == null ? null : s.auto_score;
       existing.auto_total = s.auto_total == null ? null : s.auto_total;
+      existing.submitted_late = s.submitted_late === true;
       existing.grade = null; existing.feedback = null;
       return { ...existing, created: false };
     }
@@ -216,18 +223,25 @@ class PgStore {
   async createPlacement(p) { return (await this.q('INSERT INTO placement_results (student_id,score,total,recommended_level,answers) VALUES ($1,$2,$3,$4,$5) RETURNING *', [p.student_id, p.score, p.total, p.recommended_level, JSON.stringify(p.answers || [])]))[0]; }
   async listPlacementsForUser(u) { return this.q('SELECT * FROM placement_results WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
   async createAssignment(a) {
-    return (await this.q('INSERT INTO assignments (course_id,teacher_id,title,description,due_date,questions) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=assignments.id) AS has_file', [a.course_id, a.teacher_id, a.title, a.description || null, a.due_date || null, JSON.stringify(a.questions || [])]))[0];
+    return (await this.q('INSERT INTO assignments (course_id,teacher_id,title,description,due_date,lesson_id,questions) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=assignments.id) AS has_file', [a.course_id, a.teacher_id, a.title, a.description || null, a.due_date || null, a.lesson_id || null, JSON.stringify(a.questions || [])]))[0];
   }
   async getAssignment(id) { return (await this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a WHERE a.id=$1', [id]))[0] || null; }
   async deleteAssignment(id) { const r = await this.pool.query('DELETE FROM assignments WHERE id=$1', [id]); return r.rowCount > 0; }
+  async updateAssignment(id, patch) {
+    const sets = []; const vals = []; let i = 1;
+    for (const [k, v] of Object.entries(patch)) { sets.push(`${k}=$${i++}`); vals.push(v); }
+    if (!sets.length) return this.getAssignment(id);
+    vals.push(id);
+    return (await this.q(`UPDATE assignments SET ${sets.join(',')} WHERE id=$${i} RETURNING *, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=assignments.id) AS has_file`, vals))[0] || null;
+  }
   async attachAssignmentFile(f) {
     return (await this.q('INSERT INTO assignment_files (assignment_id,filename,mime_type,byte_size,data) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (assignment_id) DO UPDATE SET filename=EXCLUDED.filename, mime_type=EXCLUDED.mime_type, byte_size=EXCLUDED.byte_size, data=EXCLUDED.data RETURNING assignment_id, filename, mime_type, byte_size', [f.assignment_id, f.filename, f.mime_type, f.byte_size, f.data]))[0];
   }
   async getAssignmentFile(assignmentId) { return (await this.q('SELECT * FROM assignment_files WHERE assignment_id=$1', [assignmentId]))[0] || null; }
   async listAssignments(courseId) { return courseId ? this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a WHERE course_id=$1 ORDER BY created_at DESC', [courseId]) : this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a ORDER BY created_at DESC'); }
   async listAssignmentsForStudent(studentId) {
-    const rows = await this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file, s.id AS submission_id, s.grade, s.feedback, s.content_text AS submission_text, s.content_url AS submission_url, s.answers AS submission_answers, s.auto_score, s.auto_total, s.created_at AS submitted_at FROM assignments a JOIN enrolments e ON e.course_id=a.course_id AND e.student_id=$1 LEFT JOIN submissions s ON s.assignment_id=a.id AND s.student_id=$1 ORDER BY a.created_at DESC', [studentId]);
-    return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, answers: r.submission_answers || [], auto_score: r.auto_score, auto_total: r.auto_total, created_at: r.submitted_at } : null }));
+    const rows = await this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file, s.id AS submission_id, s.grade, s.feedback, s.content_text AS submission_text, s.content_url AS submission_url, s.answers AS submission_answers, s.auto_score, s.auto_total, s.submitted_late, s.created_at AS submitted_at FROM assignments a JOIN enrolments e ON e.course_id=a.course_id AND e.student_id=$1 LEFT JOIN submissions s ON s.assignment_id=a.id AND s.student_id=$1 ORDER BY a.created_at DESC', [studentId]);
+    return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, answers: r.submission_answers || [], auto_score: r.auto_score, auto_total: r.auto_total, submitted_late: r.submitted_late, created_at: r.submitted_at } : null }));
   }
   async listAssignmentsForTeacher(teacherId) { return this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a JOIN courses c ON c.id=a.course_id WHERE c.teacher_id=$1 ORDER BY a.created_at DESC', [teacherId]); }
   // ON CONFLICT needs submissions_assignment_student_unique (migration 007).
@@ -235,8 +249,8 @@ class PgStore {
   // '201 created' from '200 updated' without a second query.
   async createSubmission(s) {
     const row = (await this.q(
-      'INSERT INTO submissions (assignment_id,student_id,content_url,content_text,answers,auto_score,auto_total) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (assignment_id,student_id) DO UPDATE SET content_url=EXCLUDED.content_url, content_text=EXCLUDED.content_text, answers=EXCLUDED.answers, auto_score=EXCLUDED.auto_score, auto_total=EXCLUDED.auto_total, grade=NULL, feedback=NULL, created_at=now() RETURNING *, (xmax = 0) AS created',
-      [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null, JSON.stringify(s.answers || []), s.auto_score == null ? null : s.auto_score, s.auto_total == null ? null : s.auto_total]))[0];
+      'INSERT INTO submissions (assignment_id,student_id,content_url,content_text,answers,auto_score,auto_total,submitted_late) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (assignment_id,student_id) DO UPDATE SET content_url=EXCLUDED.content_url, content_text=EXCLUDED.content_text, answers=EXCLUDED.answers, auto_score=EXCLUDED.auto_score, auto_total=EXCLUDED.auto_total, submitted_late=EXCLUDED.submitted_late, grade=NULL, feedback=NULL, created_at=now() RETURNING *, (xmax = 0) AS created',
+      [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null, JSON.stringify(s.answers || []), s.auto_score == null ? null : s.auto_score, s.auto_total == null ? null : s.auto_total, s.submitted_late === true]))[0];
     const created = row.created; delete row.created;
     return { ...row, created };
   }
