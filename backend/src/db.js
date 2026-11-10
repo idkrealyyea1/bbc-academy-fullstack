@@ -30,6 +30,8 @@ class MemoryStore {
     this.users = []; this.courses = []; this.levels = [...DEMO_LEVELS.map((l, i) => ({ id: `level-${l.code}`, ...l }))];
     this.lessons = []; this.enrolments = []; this.placements = []; this.assignments = [];
     this.submissions = []; this.grades = []; this.attendance = []; this.announcements = []; this.payments = []; this.bookingRequests = [];
+    // assignment_id -> { filename, mime_type, byte_size, data } (uploaded homework)
+    this.assignmentFiles = new Map();
     // level_id, not level_code: the API and the frontend both speak level_id,
     // so the demo store must look the same as Postgres or local testing
     // misrepresents what production shows.
@@ -82,19 +84,41 @@ class MemoryStore {
   }
   async createPlacement(p) { const r = { id: uid(), created_at: now(), ...p }; this.placements.push(r); return r; }
   async listPlacementsForUser(u) { return this.placements.filter(p => p.student_id === u); }
-  async createAssignment(a) { const r = { id: uid(), created_at: now(), ...a }; this.assignments.push(r); return r; }
-  async getAssignment(id) { return this.assignments.find(a => a.id === id) || null; }
-  async listAssignments(courseId) { return this.assignments.filter(a => !courseId || a.course_id === courseId); }
+  async createAssignment(a) { const r = { id: uid(), created_at: now(), questions: [], ...a }; this.assignments.push(r); return r; }
+  async getAssignment(id) { const a = this.assignments.find(x => x.id === id) || null; return a ? this.assignView(a) : null; }
+  async deleteAssignment(id) {
+    const i = this.assignments.findIndex(a => a.id === id);
+    if (i < 0) return false;
+    this.assignments.splice(i, 1);
+    this.assignmentFiles.delete(id);
+    const gone = new Set(this.submissions.filter(s => s.assignment_id === id).map(s => s.id));
+    this.submissions = this.submissions.filter(s => s.assignment_id !== id);
+    this.grades = this.grades.filter(g => !gone.has(g.submission_id));
+    return true;
+  }
+  // Files are metadata in list responses; the bytes are only read by the
+  // download endpoint, so keep them out of every listing.
+  assignView(a) { return { ...a, questions: a.questions || [], has_file: this.assignmentFiles.has(a.id) }; }
+  async attachAssignmentFile(f) {
+    this.assignmentFiles.set(f.assignment_id, { filename: f.filename, mime_type: f.mime_type, byte_size: f.byte_size, data: f.data });
+    const { data, ...meta } = f;
+    return meta;
+  }
+  async getAssignmentFile(assignmentId) {
+    const f = this.assignmentFiles.get(assignmentId);
+    return f ? { ...f, assignment_id: assignmentId } : null;
+  }
+  async listAssignments(courseId) { return this.assignments.filter(a => !courseId || a.course_id === courseId).map(a => this.assignView(a)); }
   async listAssignmentsForStudent(studentId) {
     const ids = new Set(this.enrolments.filter(e => e.student_id === studentId).map(e => e.course_id));
     return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).map(a => {
       const s = this.submissions.find(x => x.assignment_id === a.id && x.student_id === studentId) || null;
-      return { ...a, submission: s };
+      return { ...this.assignView(a), submission: s };
     });
   }
   async listAssignmentsForTeacher(teacherId) {
     const ids = new Set(this.courses.filter(c => c.teacher_id === teacherId).map(c => c.id));
-    return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return this.assignments.filter(a => ids.has(a.course_id)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).map(a => this.assignView(a));
   }
   // One submission per (assignment, student): a student who answers again is
   // editing their answer, not adding a second one. The reset grade is
@@ -104,6 +128,9 @@ class MemoryStore {
     if (existing) {
       existing.content_text = s.content_text || null;
       existing.content_url = s.content_url || null;
+      existing.answers = s.answers || [];
+      existing.auto_score = s.auto_score == null ? null : s.auto_score;
+      existing.auto_total = s.auto_total == null ? null : s.auto_total;
       existing.grade = null; existing.feedback = null;
       return { ...existing, created: false };
     }
@@ -180,21 +207,28 @@ class PgStore {
   }
   async createPlacement(p) { return (await this.q('INSERT INTO placement_results (student_id,score,total,recommended_level,answers) VALUES ($1,$2,$3,$4,$5) RETURNING *', [p.student_id, p.score, p.total, p.recommended_level, JSON.stringify(p.answers || [])]))[0]; }
   async listPlacementsForUser(u) { return this.q('SELECT * FROM placement_results WHERE student_id=$1 ORDER BY created_at DESC', [u]); }
-  async createAssignment(a) { return (await this.q('INSERT INTO assignments (course_id,teacher_id,title,description,due_date) VALUES ($1,$2,$3,$4,$5) RETURNING *', [a.course_id, a.teacher_id, a.title, a.description || null, a.due_date || null]))[0]; }
-  async getAssignment(id) { return (await this.q('SELECT * FROM assignments WHERE id=$1', [id]))[0] || null; }
-  async listAssignments(courseId) { return courseId ? this.q('SELECT * FROM assignments WHERE course_id=$1 ORDER BY created_at DESC', [courseId]) : this.q('SELECT * FROM assignments ORDER BY created_at DESC'); }
-  async listAssignmentsForStudent(studentId) {
-    const rows = await this.q('SELECT a.*, s.id AS submission_id, s.grade, s.feedback, s.content_text AS submission_text, s.content_url AS submission_url, s.created_at AS submitted_at FROM assignments a JOIN enrolments e ON e.course_id=a.course_id AND e.student_id=$1 LEFT JOIN submissions s ON s.assignment_id=a.id AND s.student_id=$1 ORDER BY a.created_at DESC', [studentId]);
-    return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, created_at: r.submitted_at } : null }));
+  async createAssignment(a) {
+    return (await this.q('INSERT INTO assignments (course_id,teacher_id,title,description,due_date,questions) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=assignments.id) AS has_file', [a.course_id, a.teacher_id, a.title, a.description || null, a.due_date || null, JSON.stringify(a.questions || [])]))[0];
   }
-  async listAssignmentsForTeacher(teacherId) { return this.q('SELECT a.* FROM assignments a JOIN courses c ON c.id=a.course_id WHERE c.teacher_id=$1 ORDER BY a.created_at DESC', [teacherId]); }
+  async getAssignment(id) { return (await this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a WHERE a.id=$1', [id]))[0] || null; }
+  async deleteAssignment(id) { return (await this.q('DELETE FROM assignments WHERE id=$1', [id])).length > 0; }
+  async attachAssignmentFile(f) {
+    return (await this.q('INSERT INTO assignment_files (assignment_id,filename,mime_type,byte_size,data) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (assignment_id) DO UPDATE SET filename=EXCLUDED.filename, mime_type=EXCLUDED.mime_type, byte_size=EXCLUDED.byte_size, data=EXCLUDED.data RETURNING assignment_id, filename, mime_type, byte_size', [f.assignment_id, f.filename, f.mime_type, f.byte_size, f.data]))[0];
+  }
+  async getAssignmentFile(assignmentId) { return (await this.q('SELECT * FROM assignment_files WHERE assignment_id=$1', [assignmentId]))[0] || null; }
+  async listAssignments(courseId) { return courseId ? this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a WHERE course_id=$1 ORDER BY created_at DESC', [courseId]) : this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a ORDER BY created_at DESC'); }
+  async listAssignmentsForStudent(studentId) {
+    const rows = await this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file, s.id AS submission_id, s.grade, s.feedback, s.content_text AS submission_text, s.content_url AS submission_url, s.answers AS submission_answers, s.auto_score, s.auto_total, s.created_at AS submitted_at FROM assignments a JOIN enrolments e ON e.course_id=a.course_id AND e.student_id=$1 LEFT JOIN submissions s ON s.assignment_id=a.id AND s.student_id=$1 ORDER BY a.created_at DESC', [studentId]);
+    return rows.map(r => ({ ...r, submission: r.submission_id ? { id: r.submission_id, grade: r.grade, feedback: r.feedback, content_text: r.submission_text, content_url: r.submission_url, answers: r.submission_answers || [], auto_score: r.auto_score, auto_total: r.auto_total, created_at: r.submitted_at } : null }));
+  }
+  async listAssignmentsForTeacher(teacherId) { return this.q('SELECT a.*, EXISTS (SELECT 1 FROM assignment_files f WHERE f.assignment_id=a.id) AS has_file FROM assignments a JOIN courses c ON c.id=a.course_id WHERE c.teacher_id=$1 ORDER BY a.created_at DESC', [teacherId]); }
   // ON CONFLICT needs submissions_assignment_student_unique (migration 007).
   // xmax = 0 is true only for a fresh insert, which is how the route tells
   // '201 created' from '200 updated' without a second query.
   async createSubmission(s) {
     const row = (await this.q(
-      'INSERT INTO submissions (assignment_id,student_id,content_url,content_text) VALUES ($1,$2,$3,$4) ON CONFLICT (assignment_id,student_id) DO UPDATE SET content_url=EXCLUDED.content_url, content_text=EXCLUDED.content_text, grade=NULL, feedback=NULL, created_at=now() RETURNING *, (xmax = 0) AS created',
-      [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null]))[0];
+      'INSERT INTO submissions (assignment_id,student_id,content_url,content_text,answers,auto_score,auto_total) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (assignment_id,student_id) DO UPDATE SET content_url=EXCLUDED.content_url, content_text=EXCLUDED.content_text, answers=EXCLUDED.answers, auto_score=EXCLUDED.auto_score, auto_total=EXCLUDED.auto_total, grade=NULL, feedback=NULL, created_at=now() RETURNING *, (xmax = 0) AS created',
+      [s.assignment_id, s.student_id, s.content_url || null, s.content_text || null, JSON.stringify(s.answers || []), s.auto_score == null ? null : s.auto_score, s.auto_total == null ? null : s.auto_total]))[0];
     const created = row.created; delete row.created;
     return { ...row, created };
   }

@@ -67,11 +67,39 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date? }` | 201 `{ assignment }` |
-| GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role) |
-| POST | `/api/submissions` | student | `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` on the first answer, 200 when the student revises it — one submission per assignment per student, and revising clears the old grade |
+| POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date?, questions?, file? }` — `questions` builds the homework (max 30), `file` attaches an uploaded one; either may be omitted for a plain written-answer task | 201 `{ assignment }` (`has_file: true` when a file was stored) |
+| GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role). Students receive the questions **without** `correct` / `answers` |
+| GET | `/api/assignment-files/:assignmentId` | assignment's teacher, admin, or a student enrolled in its course | — | the raw file (`Content-Type`, `Content-Disposition`, `Cache-Control: private, no-store`); 403 for anyone else |
+| POST | `/api/submissions` | student | `{ assignment_id, answers }` for question homework, else `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` on the first answer, 200 when the student revises it — one submission per assignment per student, and revising clears the old grade. Question homework is auto-marked (`auto_score` / `auto_total`); the teacher still sets the final `grade` |
 | GET | `/api/submissions?assignment_id=` | teacher, admin | — | `{ submissions: [...] }` |
 | POST | `/api/submissions/:id/grade` | teacher, admin | `{ grade: 0-100, feedback? }` | `{ submission }` (also mirrored to `grades`) |
+
+### Homework questions
+
+`questions` is an ordered array (max 30); each one is
+`{ type, prompt, ... }` with `type` one of:
+
+| `type` | Extra fields | Marking |
+|---|---|---|
+| `multiple_choice` | `options` (2-6 strings), `correct` (index) | automatic |
+| `fill_blank` | `answers` (accepted strings, 1-6) | automatic, ignores case/spacing/punctuation |
+| `translate` | `answers` (accepted translations, 1-6) | automatic, same matching rules |
+| `short_answer` | — | the teacher marks it |
+
+The API assigns `id` (`q1`, `q2`, …) and returns questions to students without
+`correct` / `answers`. A student submits
+`{ assignment_id, answers: [{ question_id, answer }] }`; the server marks the
+objective questions and stores `auto_score` / `auto_total` plus a readable
+summary in `content_text` (so the existing grading screen still shows the work).
+
+### Homework files
+
+`file` is `{ name, data }` where `data` is base64 (no `data:` prefix). Only PDF,
+PNG, JPEG and WebP are accepted — the type is decided by the file's magic bytes,
+not its name or declared type — and the limit is 2 MB. The bytes live in
+`assignment_files` (migration 008) and are only readable through
+`/api/assignment-files/:id`, so there is no public URL. The frontend fetches the
+file with its Bearer token and saves it as a local blob.
 
 ## Attendance & announcements
 
