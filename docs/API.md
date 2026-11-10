@@ -67,10 +67,12 @@ Errors: `{ "error": "<message>" }` with an HTTP status.
 
 | Method | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date?, questions?, file? }` — `questions` builds the homework (max 30), `file` attaches an uploaded one; either may be omitted for a plain written-answer task | 201 `{ assignment }` (`has_file: true` when a file was stored) |
-| GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role). Students receive the questions **without** `correct` / `answers` |
+| POST | `/api/assignments` | teacher, admin | `{ course_id, title, description?, due_date?, lesson_id?, questions?, file? }` — `questions` builds the homework (max 30), `file` attaches an uploaded one; either may be omitted for a plain written-answer task. `lesson_id` must be a lesson of `course_id` (400 otherwise) | 201 `{ assignment }` (`has_file: true` when a file was stored) |
+| PUT | `/api/assignments/:id` | the course's teacher, admin | `{ title?, description?, due_date?, lesson_id? (null clears), course_id? }` — `course_id` is refused with 409 once any student has submitted; a teacher may only edit their own homework (403) | `{ assignment }` |
+| DELETE | `/api/assignments/:id` | the course's teacher, admin | — | `{ deleted: true }` — its submissions and grades are removed with it |
+| GET | `/api/assignments?course_id=` | Logged in | — | `{ assignments: [...] }` (scoped by role). Each carries `lesson_id` (null for course-wide work); a student's `submission.submitted_late` says whether that submission arrived after `due_date`. Students receive the questions **without** `correct` / `answers` |
 | GET | `/api/assignment-files/:assignmentId` | assignment's teacher, admin, or a student enrolled in its course | — | the raw file (`Content-Type`, `Content-Disposition`, `Cache-Control: private, no-store`); 403 for anyone else |
-| POST | `/api/submissions` | student | `{ assignment_id, answers }` for question homework, else `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` on the first answer, 200 when the student revises it — one submission per assignment per student, and revising clears the old grade. Question homework is auto-marked (`auto_score` / `auto_total`); the teacher still sets the final `grade` |
+| POST | `/api/submissions` | student | `{ assignment_id, answers }` for question homework, else `{ assignment_id, content_text? , content_url? }` (at least one required) | 201 `{ submission }` on the first answer, 200 when the student revises it — one submission per assignment per student, and revising clears the old grade. `submitted_late` is set on each attempt by comparing today (academy time zone) with `due_date`, so editing the due date later does not rewrite history. Question homework is auto-marked (`auto_score` / `auto_total`); the teacher still sets the final `grade` |
 | GET | `/api/submissions?assignment_id=` | teacher, admin | — | `{ submissions: [...] }` |
 | POST | `/api/submissions/:id/grade` | teacher, admin | `{ grade: 0-100, feedback? }` | `{ submission }` (also mirrored to `grades`) |
 
@@ -148,7 +150,8 @@ other accounts stay with the admin. Every route below accepts `staff` or
 | Method | Endpoint | Body | Response |
 |---|---|---|---|
 | GET | `/api/staff/students` | — | `{ students: [...], courses: [...] }` — each student carries `enrolments` (with course titles) and submission counts |
-| GET | `/api/staff/students/:id` | — | `{ student, courses, enrolments, attendance, submissions }` (read-only activity) |
+| GET | `/api/staff/students/:id` | — | `{ student, courses, enrolments, attendance, submissions }` (homework is read-only; staff record attendance) |
+| POST | `/api/staff/students/:id/attendance` | `{ course_id, status?: "present" \| "absent" \| "late" \| "excused", attended_on? (YYYY-MM-DD, defaults to today in the academy time zone) }` — the student needs an **active** enrolment in that course (403 otherwise) | 201 `{ attendance }` |
 | POST | `/api/staff/students` | `{ full_name, email, password (≥8), username?, phone?, course_id?, status? }` | 201 `{ student, enrolment }` — the role is always `student` |
 | PUT | `/api/staff/students/:id` | `{ full_name?, username? (null clears it), email?, phone? }` — role and password are not editable here | `{ student }` |
 | POST | `/api/staff/students/:id/password` | `{ password (≥8) }` | `{ updated: true }` |
@@ -159,6 +162,13 @@ other accounts stay with the admin. Every route below accepts `staff` or
 
 > Staff accounts are created by an admin (`POST /api/admin/users` with
 > `role: "staff"`), and the role needs `db/migrations/009_staff_role.sql`.
+> Attendance marking and homework lesson links/late flags need
+> `db/migrations/010_homework_lessons_late.sql`.
+>
+> The staff page also offers a **Download class list (CSV)** button. The file is
+> built in the browser from the students already on screen (name, username,
+> email, phone, courses, enrolment statuses) — no passwords, and no extra
+> endpoint.
 
 ## Migrations
 

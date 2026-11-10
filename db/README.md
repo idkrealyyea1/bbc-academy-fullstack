@@ -23,7 +23,13 @@ production project until the owner has confirmed the demo content is wanted.
     records dashboard (adds students, usernames, passwords, enrolments).
     **Required** before creating a staff account: the `profiles.role` enum has
     no `staff` value until this runs.
-11. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
+11. `migrations/010_homework_lessons_late.sql` — `assignments.lesson_id`
+    (nullable, `ON DELETE SET NULL` so a lesson can be removed without losing
+    the homework) and `submissions.submitted_late`. **Required** by the current
+    API: homework create/edit writes `lesson_id` and submissions write
+    `submitted_late`. Homework with no lesson still shows on a lesson page
+    under "Other homework for this course".
+12. `../supabase/seed.sql` — demo levels/courses/teachers/lessons only. All
    prices are NULL on purpose (TODO for the owner); teacher rows are labelled
    DEMO and must be replaced with real staff.
 
@@ -44,6 +50,11 @@ psql bbc_academy < db/migrations/002_rls.sql
 psql bbc_academy < db/migrations/003_storage.sql
 psql bbc_academy < db/migrations/004_booking_requests.sql
 psql bbc_academy < db/migrations/005_fixes.sql
+psql bbc_academy < db/migrations/006_levels.sql
+psql bbc_academy < db/migrations/007_submissions_unique.sql
+psql bbc_academy < db/migrations/008_homework_questions.sql
+psql bbc_academy < db/migrations/009_staff_role.sql
+psql bbc_academy < db/migrations/010_homework_lessons_late.sql
 psql bbc_academy < db/supabase/seed.sql
 DATABASE_URL=postgres://localhost:5432/bbc_academy npm --prefix backend start
 ```

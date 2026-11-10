@@ -486,3 +486,64 @@ test('staff create and edit students, and are kept out of admin records', async 
   assert.equal((await call(`/api/staff/students/${id}`, { method: 'DELETE', token: staffToken })).status, 200);
   assert.equal((await call(`/api/staff/students/${id}`, { token: staffToken })).status, 404);
 });
+
+test('teachers edit and delete homework, due dates mark late work, and homework follows a lesson', async () => {
+  const teacher = await makeUser('teacher', 'hw-owner@test.local');
+  const other = await makeUser('teacher', 'hw-other@test.local');
+  const student = await makeUser('student', 'hw-late@test.local');
+  const course = await store.createCourse({ slug: 'hw-edit-course', title_en: 'HW edit course', is_published: true, teacher_id: teacher.id });
+  const course2 = await store.createCourse({ slug: 'hw-edit-course-2', title_en: 'HW second course', is_published: true, teacher_id: teacher.id });
+  const otherCourse = await store.createCourse({ slug: 'hw-other-course', title_en: 'HW other course', is_published: true, teacher_id: other.id });
+  const lesson = await store.createLesson({ course_id: course.id, title_en: 'Lesson one', order_no: 1 });
+  await store.createEnrolment({ student_id: student.id, course_id: course.id, status: 'active' });
+  const token = await login(teacher.email);
+  const studentToken = await login(student.email);
+
+  const created = await call('/api/assignments', { method: 'POST', token, body: { course_id: course.id, title: 'Draft', lesson_id: lesson.id } });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.assignment.lesson_id, lesson.id);
+  const id = created.data.assignment.id;
+
+  const wrongLesson = await call('/api/assignments', { method: 'POST', token, body: { course_id: course.id, title: 'Bad', lesson_id: 'no-such-lesson' } });
+  assert.equal(wrongLesson.status, 400);
+
+  const otherToken = await login(other.email);
+  assert.equal((await call(`/api/assignments/${id}`, { method: 'PUT', token: otherToken, body: { title: 'Hijacked' } })).status, 403);
+  assert.equal((await call(`/api/assignments/${id}`, { method: 'DELETE', token: otherToken })).status, 403);
+  assert.equal((await call(`/api/assignments/${id}`, { method: 'PUT', token, body: { course_id: otherCourse.id } })).status, 403);
+
+  const edited = await call(`/api/assignments/${id}`, { method: 'PUT', token, body: { title: 'Final title', due_date: '2020-01-01' } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.data.assignment.title, 'Final title');
+  assert.equal(edited.data.assignment.due_date, '2020-01-01');
+
+  const late = await call('/api/submissions', { method: 'POST', token: studentToken, body: { assignment_id: id, content_text: 'Sorry' } });
+  assert.equal(late.status, 201);
+  assert.equal(late.data.submission.submitted_late, true);
+
+  // Homework with submissions keeps its course, so grades stay with their class.
+  assert.equal((await call(`/api/assignments/${id}`, { method: 'PUT', token, body: { course_id: course2.id } })).status, 409);
+
+  // A later due date makes the revised work on time, without rewriting the first attempt.
+  await call(`/api/assignments/${id}`, { method: 'PUT', token, body: { due_date: '2099-01-01' } });
+  const onTime = await call('/api/submissions', { method: 'POST', token: studentToken, body: { assignment_id: id, content_text: 'On time' } });
+  assert.ok([200, 201].includes(onTime.status));
+  assert.equal(onTime.data.submission.submitted_late, false);
+
+  const list = await call('/api/assignments', { token: studentToken });
+  assert.equal(list.data.assignments[0].submission.submitted_late, false);
+  assert.equal(list.data.assignments[0].lesson_id, lesson.id);
+
+  const staff = await makeUser('staff', 'hw-staff@test.local');
+  const staffToken = await login(staff.email);
+  const marked = await call(`/api/staff/students/${student.id}/attendance`, { method: 'POST', token: staffToken, body: { course_id: course.id, status: 'present' } });
+  assert.equal(marked.status, 201);
+  assert.equal((await store.listAttendanceForUser(student.id)).length, 1);
+
+  const outsider = await makeUser('student', 'hw-outsider@test.local');
+  assert.equal((await call(`/api/staff/students/${outsider.id}/attendance`, { method: 'POST', token: staffToken, body: { course_id: course.id } })).status, 403);
+
+  assert.equal((await call(`/api/assignments/${id}`, { method: 'DELETE', token })).status, 200);
+  assert.equal((await call('/api/assignments', { token: studentToken })).data.assignments.length, 0);
+  assert.equal(store.submissions.filter(x => x.assignment_id === id).length, 0);
+});

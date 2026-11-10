@@ -428,6 +428,11 @@ app.post('/api/assignments', auth, roles('admin', 'teacher'), wrap(async (req, r
   const course = await store.getCourse(req.body.course_id);
   if (!course) return bad(res, 404, 'Course not found');
   if (!canManageCourse(req.user, course)) return bad(res, 403, 'You can only add assignments to your own courses');
+  // Optional: homework can belong to one of this course's lessons.
+  if (req.body.lesson_id) {
+    const lessons = await store.listLessons(course.id);
+    if (!lessons.some(l => l.id === req.body.lesson_id)) return bad(res, 400, 'lesson_id must be a lesson of this course');
+  }
   const questions = normaliseQuestions(req.body.questions);
   if (questions === null) return bad(res, 400, 'questions must be a valid list (max 30) of choose, complete, translate or short-answer questions');
   const decoded = decodeHomeworkFile(req.body.file);
@@ -435,6 +440,7 @@ app.post('/api/assignments', auth, roles('admin', 'teacher'), wrap(async (req, r
   const assignment = await store.createAssignment({
     course_id: course.id, teacher_id: req.user.id, title: req.body.title.trim(),
     description: req.body.description || null, due_date: req.body.due_date || null, questions,
+    lesson_id: req.body.lesson_id || null,
   });
   if (decoded.file) {
     try {
@@ -458,6 +464,49 @@ app.get('/api/assignments', auth, wrap(async (req, res) => {
   // Answers must never reach a student's browser.
   if (req.user.role === 'student') list = list.map(a => ({ ...a, questions: studentQuestions(a.questions) }));
   return ok(res, { assignments: list });
+}));
+// Editing is limited to the owner of the course: title, description, due date,
+// lesson, and the course itself while no student has handed anything in.
+app.put('/api/assignments/:id', auth, roles('admin', 'teacher'), wrap(async (req, res) => {
+  const assignment = await store.getAssignment(req.params.id);
+  if (!assignment) return bad(res, 404, 'Assignment not found');
+  const course = await store.getCourse(assignment.course_id);
+  if (!course || !canManageCourse(req.user, course)) return bad(res, 403, 'You can only edit your own homework');
+  const b = req.body || {};
+  const patch = {};
+  if (b.title !== undefined) { if (!reqStr(b, 'title', 300)) return bad(res, 400, 'Invalid title'); patch.title = b.title.trim(); }
+  if (b.description !== undefined) patch.description = b.description ? String(b.description).slice(0, 5000) : null;
+  if (b.due_date !== undefined) {
+    if (b.due_date && !isDate(b.due_date)) return bad(res, 400, 'due_date must be YYYY-MM-DD');
+    patch.due_date = b.due_date || null;
+  }
+  if (b.lesson_id !== undefined) {
+    const targetCourse = b.course_id && b.course_id !== assignment.course_id ? b.course_id : assignment.course_id;
+    if (b.lesson_id) {
+      const lessons = await store.listLessons(targetCourse);
+      if (!lessons.some(l => l.id === b.lesson_id)) return bad(res, 400, 'lesson_id must be a lesson of the homework course');
+    }
+    patch.lesson_id = b.lesson_id || null;
+  }
+  if (b.course_id !== undefined && b.course_id !== assignment.course_id) {
+    const next = await store.getCourse(b.course_id);
+    if (!next) return bad(res, 404, 'Course not found');
+    if (!canManageCourse(req.user, next)) return bad(res, 403, 'You can only move homework between your own courses');
+    const existing = await store.listSubmissions(assignment.id, null);
+    if (existing.length) return bad(res, 409, 'Homework that already has submissions cannot change course');
+    patch.course_id = next.id;
+    if (patch.lesson_id === undefined) patch.lesson_id = null;
+  }
+  if (!Object.keys(patch).length) return bad(res, 400, 'Nothing to update');
+  return ok(res, { assignment: await store.updateAssignment(assignment.id, patch) });
+}));
+app.delete('/api/assignments/:id', auth, roles('admin', 'teacher'), wrap(async (req, res) => {
+  const assignment = await store.getAssignment(req.params.id);
+  if (!assignment) return bad(res, 404, 'Assignment not found');
+  const course = await store.getCourse(assignment.course_id);
+  if (!course || !canManageCourse(req.user, course)) return bad(res, 403, 'You can only delete your own homework');
+  await store.deleteAssignment(assignment.id);
+  return ok(res, { deleted: true });
 }));
 // The only way to read an uploaded homework file: role and enrolment checked.
 app.get('/api/assignment-files/:assignmentId', auth, wrap(async (req, res) => {
@@ -496,6 +545,9 @@ app.post('/api/submissions', auth, roles('student'), wrap(async (req, res) => {
     if (!reqStr(req.body, 'content_text', 5000) && !reqStr(req.body, 'content_url', 1000)) return bad(res, 400, 'content_text or content_url required');
     payload = { content_text: req.body.content_text || null, content_url: req.body.content_url || null };
   }
+  // Late is decided when the work arrives: a due date moved later must not
+  // rewrite history. Dates are compared in the academy's timezone.
+  payload.submitted_late = assignment.due_date ? todayInAcademyTz() > assignment.due_date : false;
   // 201 the first time, 200 when the student revises an existing answer.
   const submission = await store.createSubmission({ assignment_id: assignment.id, student_id: req.user.id, ...payload });
   const created = submission.created !== false;
@@ -745,6 +797,21 @@ app.delete('/api/staff/students/:id/enrolments/:enrolmentId', auth, staffOnly, w
   const mine = await store.listEnrolmentsForUser(student.id);
   if (!mine.some(e => e.id === req.params.enrolmentId)) return bad(res, 404, 'Enrolment not found');
   return ok(res, { deleted: await store.deleteEnrolment(req.params.enrolmentId) });
+}));
+app.post('/api/staff/students/:id/attendance', auth, staffOnly, wrap(async (req, res) => {
+  const student = await staffFindStudent(req, res);
+  if (!student) return;
+  if (!reqStr(req.body, 'course_id')) return bad(res, 400, 'course_id required');
+  const status = req.body.status || 'present';
+  if (!['present', 'absent', 'late', 'excused'].includes(status)) return bad(res, 400, 'Invalid status');
+  const course = await store.getCourse(req.body.course_id);
+  if (!course) return bad(res, 404, 'Course not found');
+  // Same rule as teachers: only a current class member can be marked.
+  const enrolment = await store.getEnrolment(student.id, course.id);
+  if (!enrolment || enrolment.status !== 'active') return bad(res, 403, 'Student is not actively enrolled in this course');
+  const attendedOn = req.body.attended_on || todayInAcademyTz();
+  if (!isDate(attendedOn)) return bad(res, 400, 'attended_on must be YYYY-MM-DD');
+  return ok(res, { attendance: await store.createAttendance({ course_id: course.id, student_id: student.id, lesson_id: req.body.lesson_id || null, status, attended_on: attendedOn }) }, 201);
 }));
 app.delete('/api/staff/students/:id', auth, staffOnly, wrap(async (req, res) => {
   const student = await staffFindStudent(req, res);

@@ -879,3 +879,13 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
   .dash-row-side, .dash-row-side .btn { width: 100%; }
   .dash-row-side { justify-content: flex-start; }
 }
+/* Homework rows with an inline editor, and the late marker. */
+.hw-item { border-block-end: 1px solid var(--border-soft); }
+.hw-item:last-child { border-block-end: 0; }
+.hw-item .hw-card { border-block-end: 0; }
+.hw-edit { padding-block: 0.6rem 1rem; }
+.hw-edit[hidden] { display: none !important; }
+.badge-late { border: 1px solid var(--border-strong); color: var(--text); font-weight: 600; }
+@media (max-width: 720px) {
+  .hw-item .hw-card-actions .btn { width: auto; }
+}
