@@ -855,3 +855,27 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
   .hw-block-head .badge { align-self: flex-start; }
 }
 .hw-answer-q { color: var(--text-muted); font-weight: 600; }
+/* Lesson and homework lists: one row per item, with the way in on the end. */
+.dash-row-list { display: grid; }
+.dash-row-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding-block: 0.7rem;
+  border-block-end: 1px solid var(--border-soft);
+}
+.dash-row-card:last-child { border-block-end: 0; }
+.dash-row-main { min-width: 0; }
+.dash-row-main strong { display: block; color: var(--text); }
+.dash-row-main .muted { margin: 0; }
+.dash-row-side { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; flex: none; }
+.hw-back-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-block-end: 0.8rem; }
+.hw-page-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-block-start: 0.6rem; }
+.hw-answer-list { margin: 0.4rem 0 0; padding-inline-start: 1.1rem; color: var(--text-secondary); font-size: var(--fs-sm); }
+.hw-answer-text { white-space: pre-wrap; color: var(--text-secondary); }
+@media (max-width: 720px) {
+  .dash-row-side, .dash-row-side .btn { width: 100%; }
+  .dash-row-side { justify-content: flex-start; }
+}
