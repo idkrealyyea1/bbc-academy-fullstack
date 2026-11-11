@@ -49,14 +49,39 @@
     var submit = form.querySelector('[type="submit"]');
     if (submit && submit.parentNode === form) form.insertBefore(el, submit);
     else form.appendChild(el);
+    // Move focus to the message so it is read out, not just rendered.
+    el.tabIndex = -1;
+    el.focus({ preventScroll: true });
     el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
   }
+  function busyLabel(form) {
+    var en = form.getAttribute('data-busy-en');
+    var ar = form.getAttribute('data-busy-ar');
+    return lang() === 'ar' ? (ar || 'جارٍ التنفيذ…') : (en || 'Working…');
+  }
+  // The button answers the click: a spinner plus the verb it is doing, at the
+  // same width, and no second submit while the request is in flight.
   function setBusy(form, busy) {
-    var btn = form.querySelector('[type="submit"]');
-    if (!btn) return;
-    btn.disabled = !!busy;
-    if (busy) btn.setAttribute('aria-busy', 'true');
-    else btn.removeAttribute('aria-busy');
+    var btns = form.querySelectorAll('button[type="submit"], button:not([type])');
+    Array.prototype.forEach.call(btns, function (btn) {
+      if (busy) {
+        if (btn.__busy) return;
+        btn.__busy = { html: btn.innerHTML, width: btn.offsetWidth };
+        btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span></span>';
+        btn.lastChild.textContent = busyLabel(form);
+        if (btn.__busy.width) btn.style.minWidth = btn.__busy.width + 'px';
+        btn.disabled = true;
+        btn.classList.add('is-busy');
+        btn.setAttribute('aria-busy', 'true');
+      } else if (btn.__busy) {
+        btn.innerHTML = btn.__busy.html;
+        btn.style.minWidth = '';
+        btn.disabled = false;
+        btn.classList.remove('is-busy');
+        btn.removeAttribute('aria-busy');
+        btn.__busy = null;
+      }
+    });
   }
   function showSuccess(el, form) {
     if (!el) return;

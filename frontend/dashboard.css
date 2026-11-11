@@ -590,6 +590,54 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
 .dash-dialog-actions { display: flex; gap: 0.5rem; margin-block-start: 1.2rem; flex-wrap: wrap; }
 .dash-dialog-actions .btn { flex: 1 1 auto; }
 
+/* --- Interaction feedback: what just happened, and what is happening --- */
+.dash-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding-inline-end: 0.55rem;
+}
+.dash-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-block-start: 0.05rem;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+.dash-toast.success .dash-toast-icon { background: rgba(44, 106, 74, 0.14); color: #245840; }
+.dash-toast.error .dash-toast-icon { background: rgba(162, 42, 42, 0.12); color: #7e2121; }
+.dash-toast-msg { flex: 1 1 auto; line-height: 1.45; }
+.dash-toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  cursor: pointer;
+  opacity: 0.55;
+  border-radius: 4px;
+}
+.dash-toast-close:hover { opacity: 1; }
+.dash-toast-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* A new view fades in, so the eye registers that the page changed. */
+.dash-view.is-entering { animation: dash-view-in 0.24s var(--ease); }
+@keyframes dash-view-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.dash-empty-action { margin-block-start: 0.9rem; }
+.dash-loading-note { margin: 0 0 0.35rem; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-view.is-entering { animation: none; }
+}
+
 /* Footer */
 .dash-footer {
   border-block-start: 1px solid var(--border);

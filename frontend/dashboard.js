@@ -12,29 +12,62 @@
   var currentMe = null;
   function toast(msg, kind) {
     var wrap = document.getElementById('dashToastWrap');
-    if (!wrap) { wrap = document.createElement('div'); wrap.id = 'dashToastWrap'; wrap.className = 'dash-toast-wrap'; wrap.setAttribute('aria-live', 'polite'); document.body.appendChild(wrap); }
+    if (!wrap) { wrap = document.createElement('div'); wrap.id = 'dashToastWrap'; wrap.className = 'dash-toast-wrap'; wrap.setAttribute('aria-live', 'polite'); wrap.setAttribute('role', 'status'); document.body.appendChild(wrap); }
+    // Repeating the same result (double click, retry) should not stack copies.
+    var last = wrap.lastElementChild;
+    if (last && last.dataset.msg === String(msg) && last.dataset.kind === String(kind || '')) return;
     var el = document.createElement('div');
     el.className = 'dash-toast' + (kind ? ' ' + kind : '');
-    el.textContent = msg;
+    el.dataset.msg = String(msg);
+    el.dataset.kind = String(kind || '');
+    el.innerHTML = '<span class="dash-toast-icon" aria-hidden="true">' + (kind === 'error' ? '!' : kind === 'success' ? '✓' : 'i') + '</span>'
+      + '<span class="dash-toast-msg"></span>'
+      + '<button type="button" class="dash-toast-close" aria-label="' + h(t('Dismiss', 'إغلاق')) + '">×</button>';
+    el.querySelector('.dash-toast-msg').textContent = msg;
+    var timer = setTimeout(function () { el.remove(); }, 6000);
+    el.querySelector('.dash-toast-close').addEventListener('click', function () { clearTimeout(timer); el.remove(); });
+    // Give people time to read an error instead of snatching it away mid-sentence.
+    el.addEventListener('mouseenter', function () { clearTimeout(timer); });
+    el.addEventListener('mouseleave', function () { timer = setTimeout(function () { el.remove(); }, 3000); });
     wrap.appendChild(el);
-    setTimeout(function () { el.remove(); }, 4200);
   }
   function confirmDlg(titleEn, titleAr, bodyEn, bodyAr) {
+    var opener = document.activeElement;
     return new Promise(function (resolve) {
       var back = document.createElement('div');
       back.className = 'dash-dialog-backdrop';
-      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-label="' + h(t(titleEn, titleAr)) + '"><h2 class="dash-dialog-title">' + h(t(titleEn, titleAr)) + '</h2><p>' + h(t(bodyEn, bodyAr)) + '</p>'
+      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-labelledby="dashDlgTitle" aria-describedby="dashDlgBody">'
+        + '<h2 class="dash-dialog-title" id="dashDlgTitle">' + h(t(titleEn, titleAr)) + '</h2><p id="dashDlgBody">' + h(t(bodyEn, bodyAr)) + '</p>'
         + '<div class="dash-dialog-actions"><button class="btn danger" type="button" id="dashDlgOk">' + h(t('Delete', 'حذف')) + '</button>'
         + '<button class="btn quiet" type="button" id="dashDlgCancel">' + h(t('Cancel', 'إلغاء')) + '</button></div></div>';
       document.body.appendChild(back);
       var ok = back.querySelector('#dashDlgOk'), cancel = back.querySelector('#dashDlgCancel');
-      var done = function (v) { back.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
-      var onKey = function (e) { if (e.key === 'Escape') done(false); };
+      var done = function (v) {
+        back.remove();
+        document.removeEventListener('keydown', onKey);
+        // Put focus back where the person was, not at the top of the page.
+        // Deferred: removing the focused dialog makes the browser park focus
+        // on <body> after this function returns.
+        setTimeout(function () {
+          if (opener && opener.focus && document.contains(opener)) opener.focus();
+        }, 0);
+        resolve(v);
+      };
+      var onKey = function (e) {
+        if (e.key === 'Escape') done(false);
+        // Keep Tab inside the dialog instead of walking the page behind it.
+        if (e.key === 'Tab') {
+          var first = ok, last = cancel;
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      }
       document.addEventListener('keydown', onKey);
       back.addEventListener('click', function (e) { if (e.target === back) done(false); });
       ok.addEventListener('click', function () { done(true); });
       cancel.addEventListener('click', function () { done(false); });
-      ok.focus();
+      // Cancel is the focused default: a stray Enter must not delete a record.
+      cancel.focus();
     });
   }
   function badge(status) {
@@ -73,15 +106,48 @@
     if (!found) return code || '—';
     return found.code + ' — ' + (lang === 'ar' ? found.name_ar || found.name_en : found.name_en);
   }
-  function setBusy(btn, busy) { if (btn) btn.disabled = !!busy; }
+  // A click must always answer: the button shows a spinner and what it is doing,
+  // keeps its width (no layout jump) and cannot be fired twice.
+  function setBusy(btn, busy, labelEn, labelAr) {
+    if (!btn) return;
+    if (busy) {
+      if (btn.__busy) return;
+      btn.__busy = { html: btn.innerHTML, width: btn.offsetWidth };
+      btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>' + h(t(labelEn || 'Saving…', labelAr || 'جارٍ الحفظ…')) + '</span>';
+      if (btn.__busy.width) btn.style.minWidth = btn.__busy.width + 'px';
+      btn.disabled = true;
+      btn.classList.add('is-busy');
+      btn.setAttribute('aria-busy', 'true');
+    } else {
+      if (!btn.__busy) { btn.disabled = false; return; }
+      btn.innerHTML = btn.__busy.html;
+      btn.style.minWidth = '';
+      btn.disabled = false;
+      btn.classList.remove('is-busy');
+      btn.removeAttribute('aria-busy');
+      btn.__busy = null;
+    }
+  }
   async function refreshCurrent() {
     if (!currentMe) return;
-    if (role === 'student') await renderStudent(currentMe);
-    else if (role === 'teacher') await renderTeacher(currentMe);
-    else if (role === 'staff') await renderStaff(currentMe);
-    else await renderAdmin(currentMe);
+    // A save re-renders the page; keep the reader where they were standing
+    // instead of throwing them back to the top of a long list.
+    var scrollY = window.scrollY || window.pageYOffset || 0;
+    try {
+      if (role === 'student') await renderStudent(currentMe);
+      else if (role === 'teacher') await renderTeacher(currentMe);
+      else if (role === 'staff') await renderStaff(currentMe);
+      else await renderAdmin(currentMe);
+    } catch (err) {
+      // The save went through but the refresh did not: keep the page usable
+      // instead of leaving a button stuck on "Saving…" forever.
+      content.querySelectorAll('.btn.is-busy').forEach(function (b) { setBusy(b, false); });
+      toast(err.message, 'error');
+      return;
+    }
     accountCard();
     showView(false);
+    if (scrollY) requestAnimationFrame(function () { window.scrollTo(0, scrollY); });
   }
   window.__onLangChange = function () { if (ready) location.reload(); };
 
@@ -92,8 +158,12 @@
   // on a phone the table keeps its full width (no crushed/wrapped columns,
   // no cut-off action buttons) and the user scrolls it inside the viewport.
   // The hint below the table is shown on narrow screens only (see dashboard.css).
+  // An empty area should say what to do next, not just that it is empty.
+  function emptyState(text, actionHtml) {
+    return '<div class="dash-empty"><p>' + h(text) + '</p>' + (actionHtml ? '<div class="dash-empty-action">' + actionHtml + '</div>' : '') + '</div>';
+  }
   function table(headers, rows, emptyText) {
-    if (!rows.length) return '<div class="dash-empty"><p>' + h(emptyText) + '</p></div>';
+    if (!rows.length) return emptyState(emptyText);
     return '<div class="dash-table-scroll" tabindex="0" role="region" aria-label="' + h(t('Table', 'جدول')) + '"><table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>';
   }
   /* ----- Homework: the teacher either attaches a file or writes questions ---
@@ -143,7 +213,7 @@
   function bindHomeworkFileButtons(scope) {
     (scope || content).querySelectorAll('[data-hw-file]').forEach(function (b) {
       b.addEventListener('click', async function () {
-        setBusy(b, true);
+        setBusy(b, true, 'Opening…', 'جارٍ الفتح…');
         try { await openHomeworkFile(b.dataset.hwFile, b.dataset.hwName); }
         catch (err) { toast(err.message, 'error'); }
         setBusy(b, false);
@@ -427,6 +497,19 @@
     var hd = target.querySelector('.dash-view-title');
     if (pt && hd) pt.textContent = hd.textContent;
     if (cr && hd) cr.textContent = hd.textContent;
+    // The tab title follows the page, so several dashboard tabs stay tellable apart.
+    if (hd) document.title = hd.textContent + ' — BBC English Academy';
+    // A short fade marks the change of page; the eye should not have to hunt.
+    if (hd && showView.lastView !== target.dataset.view) {
+      showView.lastView = target.dataset.view;
+      target.classList.remove('is-entering');
+      void target.offsetWidth;
+      target.classList.add('is-entering');
+      target.addEventListener('animationend', function () { target.classList.remove('is-entering'); }, { once: true });
+      // A new page starts at its top, not halfway down the previous one.
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    }
     if (focusIt) {
       var shellTitle = document.getElementById('appPageTitle');
       if (shellTitle) { shellTitle.tabIndex = -1; shellTitle.focus(); }
@@ -543,7 +626,8 @@
 
 
   async function boot() {
-    content.innerHTML = '<div class="dash-skeleton" aria-label="' + h(t('Loading', 'جارٍ التحميل')) + '"></div><div class="dash-skeleton"></div>';
+    content.innerHTML = '<p class="muted small dash-loading-note" role="status">' + h(t('Loading your workspace…', 'جارٍ تحميل مساحة العمل…')) + '</p>'
+      + '<div class="dash-skeleton"></div><div class="dash-skeleton"></div>';
     if (!api || !api.base()) {
       content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading({ full_name: '' }, t('Demo mode — connect the API to use the dashboards.', 'وضع تجريبي — اربط الـ API لاستخدام لوحات التحكم.')));
       showView(false);
@@ -710,7 +794,7 @@
       + '<p class="muted">' + h(t('Pick a homework to perform it. The questions open on their own page.', 'اختر واجبًا لأدائه. تُفتح الأسئلة في صفحة خاصة.')) + '</p>'
       + (asg.length
         ? '<div class="dash-row-list">' + asg.map(hwRow).join('') + '</div>'
-        : '<div class="dash-empty"><p>' + h(t('No homework yet.', 'لا توجد واجبات بعد.')) + '</p></div>')
+        : emptyState(t('No homework yet.', 'لا توجد واجبات بعد.'), '<a class="btn small outline" href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a>'))
       + '</div>')
       + view('lessons', 'Lessons', 'الدروس', '<div class="card">'
       + '<p class="muted">' + h(t('Open a lesson to see its material and the homework for its course.', 'افتح درسًا لترى مادته وواجبات دورته.')) + '</p>'
@@ -1113,11 +1197,13 @@
       if (prof) prof.addEventListener('submit', async function (e) {
         e.preventDefault();
         var f = new FormData(prof);
+        var pbtn = prof.querySelector('button[type="submit"]');
+        setBusy(pbtn, true);
         try {
           await api.req('/api/staff/students/' + s.id, { method: 'PUT', body: { full_name: f.get('full_name'), username: f.get('username'), email: f.get('email'), phone: f.get('phone') } });
           toast(t('Student details saved.', 'تم حفظ بيانات الطالب.'), 'success');
           refreshCurrent();
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { toast(err.message, 'error'); setBusy(pbtn, false); }
       });
       var pw = content.querySelector('[data-staff-password]');
       if (pw) pw.addEventListener('submit', async function (e) {
@@ -1148,21 +1234,23 @@
         b.addEventListener('click', async function () {
           var id = b.dataset.saveEnrol;
           var sel = content.querySelector('[data-enrol-status="' + id + '"]');
+          setBusy(b, true);
           try {
             await api.req('/api/staff/students/' + s.id + '/enrolments/' + id, { method: 'PUT', body: { status: sel.value } });
             toast(t('Enrolment saved.', 'تم حفظ التسجيل.'), 'success');
             refreshCurrent();
-          } catch (err) { toast(err.message, 'error'); }
+          } catch (err) { toast(err.message, 'error'); setBusy(b, false); }
         });
       });
       content.querySelectorAll('[data-remove-enrol]').forEach(function (b) {
         b.addEventListener('click', async function () {
           if (!(await confirmDlg('Remove this course from the student?', 'إزالة هذه الدورة من الطالب؟'))) return;
+          setBusy(b, true);
           try {
             await api.req('/api/staff/students/' + s.id + '/enrolments/' + b.dataset.removeEnrol, { method: 'DELETE' });
             toast(t('Course removed.', 'تمت إزالة الدورة.'), 'success');
             refreshCurrent();
-          } catch (err) { toast(err.message, 'error'); }
+          } catch (err) { toast(err.message, 'error'); setBusy(b, false); }
         });
       });
       var attForm = content.querySelector('[data-staff-attendance]');
@@ -1195,7 +1283,7 @@
       if (parts[0] !== 'student') return;
       var box = document.getElementById('staffStudentDetail');
       if (!box) return;
-      box.innerHTML = '<div class="card"><p class="muted">' + h(t('Loading the student record…', 'جارٍ تحميل سجل الطالب…')) + '</p></div>';
+      box.innerHTML = '<p class="muted small dash-loading-note" role="status">' + h(t('Loading the student record…', 'جارٍ تحميل سجل الطالب…')) + '</p><div class="dash-skeleton"></div><div class="dash-skeleton"></div>';
       try {
         var d = await api.req('/api/staff/students/' + encodeURIComponent(parts[1] || ''));
         box.innerHTML = staffStudentPage(d);
@@ -1443,20 +1531,23 @@
     labelTableCells();
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Confirming…', 'جارٍ التأكيد…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.confirm, { method: 'PUT', body: { status: 'confirmed' } }); toast(t('Booking confirmed.', 'تم تأكيد الحجز.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-reject]').forEach(function (b) {
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Rejecting…', 'جارٍ الرفض…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.reject, { method: 'PUT', body: { status: 'rejected' } }); toast(t('Booking rejected.', 'تم رفض الحجز.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-approve]').forEach(function (b) {
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Approving…', 'جارٍ الموافقة…');
         try { await api.req('/api/enrolments/' + b.dataset.approve, { method: 'PUT', body: { status: 'active' } }); toast(t('Enrolment approved.', 'تمت الموافقة على التسجيل.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     var form = document.getElementById('adminCreateAccountForm');
@@ -1498,8 +1589,9 @@
       b.addEventListener('click', async function () {
         var id = b.dataset.saveCourse;
         var value = content.querySelector('[data-teacher-for="' + id + '"]').value;
+        setBusy(b, true);
         try { await api.req('/api/courses/' + id, { method: 'PUT', body: { teacher_id: value || null } }); toast(t('Teacher saved.', 'تم حفظ المعلم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-save-user]').forEach(function (b) {
@@ -1508,36 +1600,41 @@
         var body = { role: content.querySelector('[data-role-for="' + id + '"]').value };
         var pwInput = content.querySelector('[data-pw-for="' + id + '"]');
         if (pwInput.value) body.password = pwInput.value;
+        setBusy(b, true);
         try { await api.req('/api/admin/users/' + id, { method: 'PUT', body: body }); toast(t('User saved.', 'تم حفظ المستخدم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-booking]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this booking request? This cannot be undone.', 'حذف طلب الحجز هذا؟ لا يمكن التراجع عن هذا.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.deleteBooking, { method: 'DELETE' }); toast(t('Booking deleted.', 'تم حذف الطلب.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-course]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this course? Enrolments for it stay as they are.', 'حذف هذه الدورة؟ التسجيلات فيها تبقى كما هي.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/courses/' + b.dataset.deleteCourse, { method: 'DELETE' }); toast(t('Course deleted.', 'تم حذف الدورة.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-user]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this user? Their enrolments are removed too.', 'حذف هذا المستخدم؟ تسجيلاته تُحذف أيضًا.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/admin/users/' + b.dataset.deleteUser, { method: 'DELETE' }); toast(t('User deleted.', 'تم حذف المستخدم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-remove-enrolment]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Remove this enrolment?', 'إزالة هذا التسجيل؟'))) return;
+        setBusy(b, true, 'Removing…', 'جارٍ الإزالة…');
         try { await api.req('/api/enrolments/' + b.dataset.removeEnrolment, { method: 'DELETE' }); toast(t('Enrolment removed.', 'تمت إزالة التسجيل.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-booking-tab]').forEach(function (btn) {
