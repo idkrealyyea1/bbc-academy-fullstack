@@ -1052,3 +1052,125 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
 @media (max-width: 720px) {
   .hw-item .hw-card-actions .btn { width: auto; }
 }
+
+/* --- Answer sheet motion: compositor-only, capped, reduced-motion safe --- */
+.hw-quiz-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-block-end: 0.6rem;
+}
+.hw-quiz-eyebrow {
+  margin: 0 0 0.15rem;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+:lang(ar) .hw-quiz-eyebrow { letter-spacing: 0; text-transform: none; }
+.hw-quiz-head .hw-quiz-count {
+  margin: 0;
+  font-size: clamp(1.05rem, 1rem + 0.5vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.hw-ready {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface-raised);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  animation: hw-pop 0.34s var(--ease) both;
+}
+.hw-ready[hidden] { display: none; }
+.hw-progress { position: relative; }
+.hw-progress .hw-progress-fill {
+  display: block;
+  block-size: 100%;
+  inline-size: 100%;
+  background: var(--text);
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* transform only: the bar never triggers layout on a slow phone */
+  transition: transform 0.4s var(--ease);
+}
+html[dir="rtl"] .hw-progress-fill { transform-origin: right center; }
+.hw-quiz-head.is-complete .hw-progress-fill { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+
+/* Cards rise in once, max ~270ms of stagger, then never animate again. */
+.hw-question {
+  animation: hw-rise 0.34s var(--ease) both;
+  animation-delay: calc(min(var(--i, 0), 6) * 45ms);
+}
+@keyframes hw-rise {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes hw-pop {
+  0% { transform: scale(0.86); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.hw-question-no {
+  transition: background 0.25s var(--ease), color 0.25s var(--ease), transform 0.25s var(--ease);
+}
+.hw-question.is-answered .hw-question-no {
+  background: var(--text);
+  color: var(--surface-raised);
+  transform: scale(1.04);
+}
+.hw-choice {
+  transition: transform 0.15s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.hw-choice:active { transform: scale(0.995); }
+.hw-choice.is-selected .hw-choice-letter { animation: hw-pop 0.26s var(--ease); }
+@media (hover: hover) {
+  .hw-choice:hover { transform: translate3d(2px, 0, 0); }
+  html[dir="rtl"] .hw-choice:hover { transform: translate3d(-2px, 0, 0); }
+}
+/* A missing answer nudges once instead of shouting. */
+.hw-question.is-missing { animation: hw-nudge 0.32s var(--ease) 1; }
+@keyframes hw-nudge {
+  0%, 100% { transform: none; }
+  25% { transform: translate3d(-3px, 0, 0); }
+  75% { transform: translate3d(3px, 0, 0); }
+}
+.hw-submit.is-complete > button[type="submit"] { animation: hw-pulse 1.5s var(--ease) 2; }
+@keyframes hw-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 4px var(--surface-hover); }
+}
+.hw-submitted-note { display: flex; gap: 0.6rem; align-items: flex-start; }
+.hw-submitted-icon {
+  flex: none;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--surface-raised);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  animation: hw-pop 0.34s var(--ease) both;
+}
+.hw-draft { animation: hw-rise 0.3s var(--ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hw-question,
+  .hw-ready,
+  .hw-choice.is-selected .hw-choice-letter,
+  .hw-submitted-icon,
+  .hw-submit.is-complete > button[type="submit"],
+  .hw-question.is-missing,
+  .hw-draft { animation: none !important; }
+  .hw-progress-fill,
+  .hw-question-no,
+  .hw-choice { transition: none !important; }
+}

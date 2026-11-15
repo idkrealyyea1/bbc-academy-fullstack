@@ -346,9 +346,13 @@
         + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea rows="3" maxlength="5000" data-hw-text required></textarea></label></div>';
     }
     var head = '<div class="hw-quiz-head">'
-      + '<p class="hw-quiz-count" data-hw-progress-text aria-live="polite">' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '</p>'
-      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0"><span></span></div>'
-      + '<p class="hw-help">' + h(t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.')) + '</p>'
+      + '<div class="hw-quiz-top">'
+      + '<div><p class="hw-quiz-eyebrow">' + h(t('Answer sheet', 'ورقة الإجابة')) + '</p>'
+      + '<p class="hw-quiz-count" data-hw-progress-text aria-live="polite">' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '</p></div>'
+      + '<span class="hw-ready" data-hw-ready hidden>' + h(t('All answered', 'اكتملت')) + ' <span aria-hidden="true">✓</span></span>'
+      + '</div>'
+      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0"><span class="hw-progress-fill"></span></div>'
+      + '<p class="hw-help" data-hw-help>' + h(t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.')) + '</p>'
       + '</div>'
       + '<div class="hw-draft" data-hw-draft hidden><span>' + h(t('Draft restored — your earlier answers are still here.', 'تمت استعادة المسودة — إجاباتك السابقة ما زالت هنا.')) + '</span>'
       + '<button type="button" class="btn small quiet" data-hw-draft-clear>' + h(t('Start over', 'البدء من جديد')) + '</button></div>';
@@ -369,7 +373,7 @@
         control = '<input maxlength="5000" data-hw-answer="' + h(q.id) + '" value="' + h(prev) + '"' + described + ' autocomplete="off" autocapitalize="off" spellcheck="false">';
       }
       var marked = q.type === 'short_answer' ? t('Marked by your teacher', 'يصححه معلمك') : t('Marked automatically', 'يُصحح تلقائيًا');
-      return '<div class="hw-question" data-hw-q="' + h(q.id) + '">'
+      return '<div class="hw-question" data-hw-q="' + h(q.id) + '" style="--i:' + Math.min(i, 6) + '">'
         + '<p class="hw-question-prompt" id="' + promptId + '"><span class="hw-question-no" aria-hidden="true">' + (i + 1) + '</span>'
         + '<span class="hw-question-text">' + h(q.prompt) + '</span></p>'
         + '<p class="hw-q-meta"><span class="hw-type">' + h(hwTypeLabel(q.type)) + '</span> <span class="hw-q-auto">' + h(marked) + '</span></p>'
@@ -427,14 +431,40 @@
     var total = (a.questions || []).length;
     var done = 0;
     (a.questions || []).forEach(function (q) { if (hwAnswerValue(form, a, q)) done++; });
+    var all = total > 0 && done === total;
     var bar = form.querySelector('[data-hw-progress]');
     if (bar) {
       bar.setAttribute('aria-valuenow', String(done));
-      var fill = bar.querySelector('span');
-      if (fill) fill.style.width = (total ? Math.round((done / total) * 100) : 0) + '%';
+      var fill = bar.querySelector('.hw-progress-fill');
+      // scaleX keeps the bar on the compositor: no layout work on weak phones.
+      if (fill) fill.style.transform = 'scaleX(' + (total ? (done / total) : 0) + ')';
     }
+    (a.questions || []).forEach(function (q, i) {
+      var box = form.querySelector('[data-hw-q="' + q.id + '"]');
+      if (!box) return;
+      var answered = !!hwAnswerValue(form, a, q);
+      box.classList.toggle('is-answered', answered);
+      var no = box.querySelector('.hw-question-no');
+      if (no) no.textContent = answered ? '✓' : String(i + 1);
+    });
+    form.classList.toggle('is-complete', all);
+    var head = form.querySelector('.hw-quiz-head');
+    if (head) head.classList.toggle('is-complete', all);
+    var ready = form.querySelector('[data-hw-ready]');
+    if (ready) ready.hidden = !all;
     var label = form.querySelector('[data-hw-progress-text]');
-    if (label) label.textContent = t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+    if (label) label.textContent = all
+      ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
+      : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+    var help = form.querySelector('[data-hw-help]');
+    if (help) help.textContent = all
+      ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
+      : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
+        : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn && !btn.__busy && !a.submission) btn.textContent = all
+      ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات')
+      : t('Submit homework', 'تسليم الواجب');
     return done;
   }
   function hwValidate(form, a) {
@@ -883,7 +913,7 @@
           + '</div>';
       }
       var submittedNote = a.submission
-        ? '<p class="hw-submitted-note">' + h(t('You have submitted this homework. You can revise your answers and send them again; your teacher confirms the final grade.', 'لقد سلّمت هذا الواجب. يمكنك تعديل إجاباتك وإرسالها مجددًا، ويؤكد معلمك الدرجة النهائية.')) + '</p>'
+        ? '<p class="hw-submitted-note"><span class="hw-submitted-icon" aria-hidden="true">✓</span><span>' + h(t('You have submitted this homework. You can revise your answers and send them again; your teacher confirms the final grade.', 'لقد سلّمت هذا الواجب. يمكنك تعديل إجاباتك وإرسالها مجددًا، ويؤكد معلمك الدرجة النهائية.')) + '</span></p>'
         : '';
       return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head + submittedNote
         + (a.has_file ? '<p>' + hwFileButton(a) + '</p>' : '')
