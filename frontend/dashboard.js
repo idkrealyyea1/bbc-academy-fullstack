@@ -437,7 +437,8 @@
       bar.setAttribute('aria-valuenow', String(done));
       var fill = bar.querySelector('.hw-progress-fill');
       // scaleX keeps the bar on the compositor: no layout work on weak phones.
-      if (fill) fill.style.transform = 'scaleX(' + (total ? (done / total) : 0) + ')';
+      var nextFill = 'scaleX(' + (total ? (done / total) : 0) + ')';
+      if (fill && fill.style.transform !== nextFill) fill.style.transform = nextFill;
     }
     (a.questions || []).forEach(function (q, i) {
       var box = form.querySelector('[data-hw-q="' + q.id + '"]');
@@ -445,26 +446,36 @@
       var answered = !!hwAnswerValue(form, a, q);
       box.classList.toggle('is-answered', answered);
       var no = box.querySelector('.hw-question-no');
-      if (no) no.textContent = answered ? '✓' : String(i + 1);
+      var nextNo = answered ? '✓' : String(i + 1);
+      if (no && no.textContent !== nextNo) no.textContent = nextNo;
     });
     form.classList.toggle('is-complete', all);
     var head = form.querySelector('.hw-quiz-head');
     if (head) head.classList.toggle('is-complete', all);
     var ready = form.querySelector('[data-hw-ready]');
     if (ready) ready.hidden = !all;
+    // The count is an aria-live region: rewriting the same text on every
+    // keystroke makes screen readers chatter. Only touch it when it changes.
     var label = form.querySelector('[data-hw-progress-text]');
-    if (label) label.textContent = all
-      ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
-      : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+    if (label) {
+      var nextLabel = all
+        ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
+        : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+      if (label.textContent !== nextLabel) label.textContent = nextLabel;
+    }
     var help = form.querySelector('[data-hw-help]');
-    if (help) help.textContent = all
-      ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
-      : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
-        : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
+    if (help) {
+      var nextHelp = all
+        ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
+        : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
+          : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
+      if (help.textContent !== nextHelp) help.textContent = nextHelp;
+    }
     var btn = form.querySelector('button[type="submit"]');
-    if (btn && !btn.__busy && !a.submission) btn.textContent = all
-      ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات')
-      : t('Submit homework', 'تسليم الواجب');
+    if (btn && !btn.__busy && !a.submission) {
+      var nextBtn = all ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات') : t('Submit homework', 'تسليم الواجب');
+      if (btn.textContent !== nextBtn) btn.textContent = nextBtn;
+    }
     return done;
   }
   function hwValidate(form, a) {
