@@ -349,9 +349,8 @@
       + '<div class="hw-quiz-top">'
       + '<div><p class="hw-quiz-eyebrow">' + h(t('Answer sheet', 'ورقة الإجابة')) + '</p>'
       + '<p class="hw-quiz-count" data-hw-progress-text aria-live="polite">' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '</p></div>'
-      + '<span class="hw-ready" data-hw-ready hidden>' + h(t('All answered', 'اكتملت')) + ' <span aria-hidden="true">✓</span></span>'
       + '</div>'
-      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0"><span class="hw-progress-fill"></span></div>'
+      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0" aria-valuetext="' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '"><span class="hw-progress-fill"></span></div>'
       + '<p class="hw-help" data-hw-help>' + h(t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.')) + '</p>'
       + '</div>'
       + '<div class="hw-draft" data-hw-draft hidden><span>' + h(t('Draft restored — your earlier answers are still here.', 'تمت استعادة المسودة — إجاباتك السابقة ما زالت هنا.')) + '</span>'
@@ -401,6 +400,7 @@
       if (!raw) return null;
       var d = JSON.parse(raw);
       if (!d || !d.answers) return null;
+      if (!d.at || Date.now() - d.at > 30 * 24 * 60 * 60 * 1000) { hwDraftClear(a.id); return null; }
       // A changed question set makes an old draft meaningless.
       if (d.qids !== (a.questions || []).map(function (q) { return q.id; }).join(',')) return null;
       return d;
@@ -428,56 +428,49 @@
     if (counter) counter.textContent = input.value.length + ' / 5000';
   }
   function hwUpdateProgress(form, a) {
-    var total = (a.questions || []).length;
-    var done = 0;
-    (a.questions || []).forEach(function (q) { if (hwAnswerValue(form, a, q)) done++; });
+    var qs = a.questions || [];
+    var total = qs.length;
+    var flags = qs.map(function (q) { return hwAnswerValue(form, a, q) ? '1' : '0'; });
+    var done = flags.filter(function (f) { return f === '1'; }).length;
+    var sig = flags.join('');
+    // Typing that changes no answered/empty state must touch nothing: the count
+    // is an aria-live region and would otherwise re-announce.
+    if (form.__hwSig === sig && form.__hwTotal === total) return done;
+    form.__hwSig = sig;
+    form.__hwTotal = total;
     var all = total > 0 && done === total;
     var bar = form.querySelector('[data-hw-progress]');
     if (bar) {
+      var spoken = t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
       bar.setAttribute('aria-valuenow', String(done));
+      bar.setAttribute('aria-valuetext', spoken);
       var fill = bar.querySelector('.hw-progress-fill');
-      // scaleX keeps the bar on the compositor: no layout work on weak phones.
-      var nextFill = 'scaleX(' + (total ? (done / total) : 0) + ')';
-      if (fill && fill.style.transform !== nextFill) fill.style.transform = nextFill;
+      // scaleX stays on the compositor; no layout per frame on a weak phone.
+      if (fill) fill.style.transform = 'scaleX(' + (total ? (done / total) : 0) + ')';
     }
-    (a.questions || []).forEach(function (q, i) {
+    qs.forEach(function (q, i) {
       var box = form.querySelector('[data-hw-q="' + q.id + '"]');
-      if (!box) return;
-      var answered = !!hwAnswerValue(form, a, q);
-      box.classList.toggle('is-answered', answered);
-      var no = box.querySelector('.hw-question-no');
-      var nextNo = answered ? '✓' : String(i + 1);
-      if (no && no.textContent !== nextNo) no.textContent = nextNo;
+      if (box) box.classList.toggle('is-answered', flags[i] === '1');
     });
     form.classList.toggle('is-complete', all);
     var head = form.querySelector('.hw-quiz-head');
     if (head) head.classList.toggle('is-complete', all);
-    var ready = form.querySelector('[data-hw-ready]');
-    if (ready) ready.hidden = !all;
-    // The count is an aria-live region: rewriting the same text on every
-    // keystroke makes screen readers chatter. Only touch it when it changes.
     var label = form.querySelector('[data-hw-progress-text]');
-    if (label) {
-      var nextLabel = all
-        ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
-        : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
-      if (label.textContent !== nextLabel) label.textContent = nextLabel;
-    }
+    if (label) label.textContent = all
+      ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
+      : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
     var help = form.querySelector('[data-hw-help]');
-    if (help) {
-      var nextHelp = all
-        ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
-        : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
-          : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
-      if (help.textContent !== nextHelp) help.textContent = nextHelp;
-    }
+    if (help) help.textContent = all
+      ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
+      : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
+        : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
     var btn = form.querySelector('button[type="submit"]');
     if (btn && !btn.__busy && !a.submission) {
-      var nextBtn = all ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات') : t('Submit homework', 'تسليم الواجب');
-      if (btn.textContent !== nextBtn) btn.textContent = nextBtn;
+      btn.textContent = all ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات') : t('Submit homework', 'تسليم الواجب');
     }
     return done;
   }
+
   function hwValidate(form, a) {
     var missing = [];
     (a.questions || []).forEach(function (q) {
@@ -536,6 +529,7 @@
     form.addEventListener('input', onEdit);
     form.addEventListener('change', onEdit);
     var restored = hwRestoreDraft(form, a);
+    form.querySelectorAll('[data-hw-answer]').forEach(hwCountAnswer);
     form.querySelectorAll('input[type="radio"]:checked').forEach(function (radio) {
       var label = radio.closest('.hw-choice');
       if (label) label.classList.add('is-selected');
@@ -567,6 +561,7 @@
       hwBindAnswerSheet(form, assignment);
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
+        clearTimeout(form.__hwDraftTimer);
         var body;
         if ((assignment.questions || []).length) {
           // Reliable submission: every question is answered, so auto-marking

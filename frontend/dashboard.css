@@ -934,13 +934,6 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
   border: 1px solid var(--border-soft);
   overflow: hidden;
 }
-.hw-progress span {
-  display: block;
-  block-size: 100%;
-  inline-size: 0;
-  background: var(--text);
-  transition: inline-size 0.25s var(--ease);
-}
 .hw-help { margin: 0.4rem 0 0; font-size: var(--fs-xs); color: var(--text-muted); }
 .hw-draft {
   display: flex;
@@ -968,12 +961,14 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
 .hw-question.is-missing { border-color: var(--danger); }
 .hw-question-prompt { margin: 0 0 0.3rem; gap: 0.55rem; align-items: flex-start; }
 .hw-question-no {
+  position: relative;
   flex: none;
   inline-size: 1.65rem;
   block-size: 1.65rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--border-soft);
   border-radius: 50%;
   background: var(--surface-inset);
   color: var(--text);
@@ -1076,22 +1071,8 @@ body.dashboard-page h3 { overflow-wrap: break-word; }
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-.hw-ready {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--surface-raised);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  animation: hw-pop 0.34s var(--ease) both;
-}
-.hw-ready[hidden] { display: none; }
 .hw-progress { position: relative; }
-.hw-progress .hw-progress-fill {
+.hw-progress-fill {
   display: block;
   block-size: 100%;
   inline-size: 100%;
@@ -1118,13 +1099,25 @@ html[dir="rtl"] .hw-progress-fill { transform-origin: right center; }
   60% { transform: scale(1.06); }
   100% { transform: scale(1); }
 }
-.hw-question-no {
-  transition: background 0.25s var(--ease), color 0.25s var(--ease), transform 0.25s var(--ease);
-}
-.hw-question.is-answered .hw-question-no {
+.hw-question-no { transition: border-color 0.25s var(--ease); }
+/* Answered keeps its number and gains a tick, so order stays legible. */
+.hw-question.is-answered .hw-question-no { border-color: var(--text); }
+.hw-question.is-answered .hw-question-no::after {
+  content: "✓";
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-end: -5px;
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  border-radius: 50%;
   background: var(--text);
   color: var(--surface-raised);
-  transform: scale(1.04);
+  font-size: 0.55rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: hw-pop 0.25s var(--ease);
 }
 .hw-choice {
   transition: transform 0.15s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
@@ -1142,10 +1135,21 @@ html[dir="rtl"] .hw-progress-fill { transform-origin: right center; }
   25% { transform: translate3d(-3px, 0, 0); }
   75% { transform: translate3d(3px, 0, 0); }
 }
-.hw-submit.is-complete > button[type="submit"] { animation: hw-pulse 1.5s var(--ease) 2; }
-@keyframes hw-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 transparent; }
-  50% { box-shadow: 0 0 0 4px var(--surface-hover); }
+/* Ring instead of shadow: transform and opacity only. */
+.hw-submit > button[type="submit"] { position: relative; }
+.hw-submit.is-complete > button[type="submit"]::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--text);
+  opacity: 0;
+  pointer-events: none;
+  animation: hw-ring 1.5s var(--ease) 2;
+}
+@keyframes hw-ring {
+  0% { opacity: 0.5; transform: scale(0.97); }
+  70%, 100% { opacity: 0; transform: scale(1.045); }
 }
 .hw-submitted-note { display: flex; gap: 0.6rem; align-items: flex-start; }
 .hw-submitted-icon {
@@ -1164,13 +1168,16 @@ html[dir="rtl"] .hw-progress-fill { transform-origin: right center; }
 .hw-draft { animation: hw-rise 0.3s var(--ease) both; }
 @media (prefers-reduced-motion: reduce) {
   .hw-question,
-  .hw-ready,
   .hw-choice.is-selected .hw-choice-letter,
   .hw-submitted-icon,
-  .hw-submit.is-complete > button[type="submit"],
+  .hw-submit.is-complete > button[type="submit"]::after,
   .hw-question.is-missing,
-  .hw-draft { animation: none !important; }
+  .hw-draft,
+  .hw-question.is-answered .hw-question-no::after { animation: none !important; }
   .hw-progress-fill,
   .hw-question-no,
   .hw-choice { transition: none !important; }
+}
+@media (prefers-reduced-motion: reduce) and (hover: hover) {
+  .hw-choice:hover { transform: none !important; }
 }
