@@ -313,6 +313,50 @@
     return a.submission && a.submission.submitted_late
       ? '<span class="badge badge-late">' + h(t('Late', 'متأخر')) + '</span>' : '';
   }
+  // A deadline is the thing students actually miss. Compare calendar dates in
+  // local time instead of parsing a timestamp, so a due date never shifts by
+  // the visitor's timezone.
+  function hwDueInfo(a) {
+    if (!a.due_date || a.submission) return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(a.due_date));
+    if (!m) return null;
+    var due = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(due.getTime())) return null;
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var days = Math.round((due - today) / 86400000);
+    return { days: days, state: days < 0 ? 'overdue' : (days === 0 ? 'today' : (days <= 3 ? 'soon' : 'later')) };
+  }
+  function hwDueChip(a) {
+    var info = hwDueInfo(a);
+    if (!info || info.state === 'later') return '';
+    var label;
+    if (info.state === 'overdue') {
+      var late = -info.days;
+      label = late === 1 ? t('1 day overdue', 'متأخر يومًا واحدًا')
+        : late === 2 ? t('2 days overdue', 'متأخر يومين')
+          : late <= 10 ? t(late + ' days overdue', 'متأخر ' + late + ' أيام')
+          : t(late + ' days overdue', 'متأخر ' + late + ' يومًا');
+    } else if (info.state === 'today') {
+      label = t('Due today', 'التسليم اليوم');
+    } else {
+      label = info.days === 1 ? t('Due tomorrow', 'التسليم غدًا')
+        : info.days === 2 ? t('Due in 2 days', 'التسليم بعد يومين')
+          : t('Due in 3 days', 'التسليم بعد 3 أيام');
+    }
+    return '<span class="badge ' + (info.state === 'overdue' ? 'hw-due-overdue' : 'hw-due-soon') + '">' + h(label) + '</span>';
+  }
+  // Work still to hand in first, then the nearest deadline, then undated work.
+  function hwSortByDue(list) {
+    return list.slice().sort(function (a, b) {
+      var handed = (a.submission ? 1 : 0) - (b.submission ? 1 : 0);
+      if (handed) return handed;
+      var ax = a.due_date || '9999-12-31';
+      var bx = b.due_date || '9999-12-31';
+      if (ax === bx) return 0;
+      return ax < bx ? -1 : 1;
+    });
+  }
   function hwAutoNote(a) {
     return a.submission && a.submission.auto_total
       ? '<p class="muted small">' + h(t('Auto-marked: ', 'التصحيح التلقائي: ') + a.submission.auto_score + ' / ' + a.submission.auto_total + t('. Your teacher confirms the final grade.', '. درجتك النهائية يحددها معلمك.')) + '</p>'
@@ -869,9 +913,10 @@
     // One homework as a row in a list: title, its info, status, and the way in.
     function hwRow(a) {
       var st = hwStatusOf(a);
-      return '<div class="dash-row-card" data-hw-status="' + st + '"><div class="dash-row-main"><strong>' + h(a.title) + '</strong>'
+      var due = hwDueInfo(a);
+      return '<div class="dash-row-card' + (due && due.state === 'overdue' ? ' is-overdue' : '') + '" data-hw-status="' + st + '"><div class="dash-row-main"><strong>' + h(a.title) + '</strong>'
         + '<p class="muted small">' + h(courseTitle(a.course_id)) + ' · ' + h(hwMeta(a)) + '</p></div>'
-        + '<div class="dash-row-side">' + hwStatusChip(a) + hwLateChip(a)
+        + '<div class="dash-row-side">' + hwDueChip(a) + hwStatusChip(a) + hwLateChip(a)
         + '<a class="btn small" href="#perform/' + h(a.id) + '">' + h(st === 'graded' ? t('Review homework', 'مراجعة الواجب') : t('Perform homework', 'أداء الواجب')) + '</a></div></div>';
     }
     function backLink(hash, en, ar) {
@@ -959,11 +1004,24 @@
         var firstEnr = enr.find(function (e) { return e.status === 'active' || e.status === 'pending'; }) || enr[0];
         var firstCourse = firstEnr ? cmap[firstEnr.course_id] : null;
         var cont = firstCourse ? '<a class="btn small" href="course.html?id=' + h(firstCourse.slug || firstCourse.id) + '">' + h(t('Continue learning', 'واصل التعلّم')) + '</a>' : '';
+        // The one piece of work to open next, with the way straight into it.
+        var nextUp = hwSortByDue(openAsg)[0];
+        var nextHtml = nextUp
+          ? '<div class="dash-nextup">'
+            + '<span class="dash-nextup-label">' + h(t('Next up', 'التالي')) + '</span>'
+            + '<strong class="dash-nextup-title">' + h(nextUp.title) + '</strong>'
+            + '<p class="muted small">' + h(courseTitle(nextUp.course_id)) + ' · ' + h(hwMeta(nextUp)) + '</p>'
+            + '<div class="dash-nextup-actions">' + hwDueChip(nextUp)
+            + '<a class="btn small" href="#perform/' + h(nextUp.id) + '">' + h(t('Start now', 'ابدأ الآن')) + '</a>'
+            + '<a class="btn small outline" href="#homework">' + h(openAsg.length === 1
+              ? t('See the homework', 'الواجب')
+              : t('All ' + openAsg.length + ' tasks', 'كل الواجبات (' + openAsg.length + ')')) + '</a>'
+            + '</div></div>'
+          : '';
         var steps = [];
         if (!place.length) steps.push('<li>' + h(t('Take the placement test to get your level.', 'أجرِ اختبار تحديد المستوى لمعرفة مستواك.')) + ' <a href="levels.html">' + h(t('Placement test', 'اختبار تحديد المستوى')) + '</a></li>');
-        if (openAsg.length) steps.push('<li>' + h(t(openAsg.length + ' homework task(s) waiting for you.', openAsg.length + ' واجب بانتظارك.')) + ' <a href="#homework">' + h(t('Open homework', 'افتح الواجبات')) + '</a></li>');
         if (!enr.length) steps.push('<li>' + h(t('You are not enrolled in any course yet. Book a seat to get started.', 'لست مسجلًا في أي دورة بعد. احجز مقعدًا للبدء.')) + ' <a href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a></li>');
-        return '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Next steps', 'الخطوات التالية')) + '</h2>' + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
+        return '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Next steps', 'الخطوات التالية')) + '</h2>' + nextHtml + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
       })())
       + view('courses', 'My courses', 'دوراتي', '<div class="card">'
       + table([t('Course', 'الدورة'), t('Level', 'المستوى'), t('Status', 'الحالة'), t('Lessons', 'الدروس'), t('Assignments', 'الواجبات'), ''], enr.map(function (e) {
@@ -975,7 +1033,14 @@
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>')
       + view('progress', 'My progress', 'تقدّمي', '<div class="card"><h2 class="dash-card-title">' + h(t('Placement & level', 'تحديد المستوى')) + '</h2>'
       + (latest ? '<p>' + h(t('Latest result: ', 'آخر نتيجة: ')) + latest.score + ' / ' + latest.total + ' — ' + h(t('Recommended level: ', 'المستوى الموصى به: ')) + h(levelNameByCode(latest.recommended_level, stuLevels)) + '</p>' : '<p class="muted">' + h(t('No placement test taken yet.', 'لم تُجرَ اختبار تحديد مستوى بعد.')) + ' <a href="levels.html">' + h(t('Take the placement test', 'أجرِ اختبار تحديد المستوى')) + '</a></p>') + '</div>'
-      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance', 'الحضور')) + '</h2><p>' + h(t('Present: ', 'الحاضر: ')) + present + ' / ' + att.length + '</p><p class="muted">' + h(t('Attendance counts only records marked present, out of all recorded attendance days for you. Absent, late and excused days are not counted as present.', 'الحضور يحسب فقط الأيام المسجلة كحاضر، من مجموع أيام الحضور المسجلة لك. أيام الغياب والتأخر والعذر لا تُحسب كحاضر.')) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance', 'الحضور')) + '</h2>'
+      + (att.length
+        ? '<p class="att-rate"><strong>' + Math.round((present / att.length) * 100) + '%</strong> <span class="muted">' + h(t('present, out of ' + att.length + ' recorded days', 'حاضر خلال ' + att.length + ' أيام مسجّلة')) + '</span></p>'
+          + '<div class="att-breakdown">' + [['present', 'Present', 'حاضر'], ['late', 'Late', 'متأخر'], ['absent', 'Absent', 'غائب'], ['excused', 'Excused', 'بعذر']].map(function (s) {
+            return '<div class="att-stat"><span class="att-stat-label">' + h(t(s[1], s[2])) + '</span><strong>' + att.filter(function (x) { return x.status === s[0]; }).length + '</strong></div>';
+          }).join('') + '</div>'
+        : '<p class="muted">' + h(t('No attendance recorded yet.', 'لا يوجد حضور مسجل بعد.')) + '</p>')
+      + '<p class="muted small">' + h(t('Only the days your teacher recorded are counted.', 'تُحسب فقط الأيام التي سجلها معلمك.')) + '</p></div>'
       + '<div class="card"><h2 class="dash-card-title">' + h(t('Grades', 'الدرجات')) + '</h2>'
       + table([t('Task', 'المهمة'), t('Grade', 'الدرجة'), t('Feedback', 'ملاحظات')], asg.filter(function (a) { return a.submission && a.submission.grade != null; }).map(function (a) {
         return '<tr><td>' + h(a.title) + '</td><td>' + h(a.submission.grade) + ' / 100</td><td>' + h(a.submission.feedback || '') + '</td></tr>';
@@ -984,7 +1049,7 @@
       + ['all', 'pending', 'submitted', 'graded'].map(function (s) { return '<button type="button" data-hw-tab="' + s + '" class="' + (s === 'all' ? 'active' : '') + '">' + h(s === 'all' ? t('All', 'الكل') : s === 'pending' ? t('Pending', 'بانتظار التسليم') : s === 'submitted' ? t('Submitted', 'مُسلَّمة') : t('Graded', 'مصححة')) + '</button>'; }).join('') + '</div>'
       + '<p class="muted">' + h(t('Pick a homework to perform it. The questions open on their own page.', 'اختر واجبًا لأدائه. تُفتح الأسئلة في صفحة خاصة.')) + '</p>'
       + (asg.length
-        ? '<div class="dash-row-list">' + asg.map(hwRow).join('') + '</div>'
+        ? '<div class="dash-row-list">' + hwSortByDue(asg).map(hwRow).join('') + '</div>'
         : emptyState(t('No homework yet.', 'لا توجد واجبات بعد.'), '<a class="btn small outline" href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a>'))
       + '</div>')
       + view('lessons', 'Lessons', 'الدروس', '<div class="card">'

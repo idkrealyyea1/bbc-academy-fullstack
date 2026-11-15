@@ -1181,3 +1181,68 @@ html[dir="rtl"] .hw-progress-fill { transform-origin: right center; }
 @media (prefers-reduced-motion: reduce) and (hover: hover) {
   .hw-choice:hover { transform: none !important; }
 }
+
+/* --- Deadlines, the next task, and attendance: information over chrome --- */
+/* A missed deadline is marked on the row itself, on the reading edge. */
+.dash-row-card.is-overdue {
+  border-inline-start: 3px solid var(--danger);
+  padding-inline-start: 0.6rem;
+}
+.hw-due-soon {
+  color: var(--warning);
+  border-color: rgba(138, 90, 18, 0.3);
+  background: var(--warning-soft);
+}
+.hw-due-overdue {
+  color: var(--danger);
+  border-color: rgba(162, 42, 42, 0.32);
+  background: var(--danger-soft);
+}
+.dash-nextup {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0.75rem 0.9rem;
+  margin-block: 0.6rem 0.9rem;
+}
+.dash-nextup-label {
+  display: block;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+:lang(ar) .dash-nextup-label { letter-spacing: 0; text-transform: none; font-size: var(--fs-xs); }
+.dash-nextup-title {
+  display: block;
+  margin-block: 0.15rem 0.2rem;
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+.dash-nextup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-block-start: 0.55rem;
+}
+.att-rate { margin: 0 0 0.6rem; }
+.att-rate strong { font-size: 1.6rem; font-weight: 700; }
+.att-breakdown {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.att-stat {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  padding: 0.5rem;
+  text-align: center;
+}
+.att-stat-label { display: block; font-size: var(--fs-xs); color: var(--text-muted); }
+.att-stat strong { display: block; font-size: var(--fs-md); color: var(--text); }
+@media (max-width: 520px) {
+  .att-breakdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
