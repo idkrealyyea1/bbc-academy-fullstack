@@ -331,7 +331,9 @@
       return '<li>' + prompt + h(shown) + '</li>';
     }).join('') + '</ol>';
   }
-  // Question controls (or the written-answer box) for one assignment.
+  // The student's answer sheet: one calm card per question, a live meter of how
+  // much is done, and a draft saved on this device. A refresh, a phone call or a
+  // dead battery must never cost a student their answers.
   function hwAnswerFields(a) {
     var qs = a.questions || [];
     var mine = (a.submission && a.submission.answers) || [];
@@ -339,63 +341,213 @@
       var found = mine.filter(function (x) { return x.question_id === qid; })[0];
       return found ? String(found.answer == null ? '' : found.answer) : '';
     }
-    var fields;
-    if (qs.length) {
-      fields = qs.map(function (q, i) {
-        var prev = previous(q.id);
-        var control;
-        if (q.type === 'multiple_choice') {
-          control = '<div class="hw-choices">' + (q.options || []).map(function (o, oi) {
-            return '<label class="hw-choice"><input type="radio" name="ans_' + h(a.id) + '_' + h(q.id) + '" value="' + oi + '"' + (prev === String(oi) ? ' checked' : '') + '> <span>' + h(o) + '</span></label>';
-          }).join('') + '</div>';
-        } else if (q.type === 'short_answer') {
-          control = '<textarea rows="2" maxlength="5000" data-hw-answer="' + h(q.id) + '">' + h(prev) + '</textarea>';
-        } else {
-          control = '<input maxlength="5000" data-hw-answer="' + h(q.id) + '" value="' + h(prev) + '">';
-        }
-        return '<div class="hw-question"><p class="hw-question-prompt"><span class="hw-question-no">' + (i + 1) + '.</span> ' + h(q.prompt)
-          + ' <span class="hw-type">' + h(hwTypeLabel(q.type)) + '</span></p>' + control + '</div>';
-      }).join('');
-    } else {
-      fields = (a.has_file ? '<p class="muted">' + h(t('Do the homework in the file, then write your answer here.', 'حل الواجب في الملف ثم اكتب إجابتك هنا.')) + '</p>' : '')
+    if (!qs.length) {
+      return (a.has_file ? '<p class="muted">' + h(t('Do the homework in the file, then write your answer here.', 'حل الواجب في الملف ثم اكتب إجابتك هنا.')) + '</p>' : '')
         + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea rows="3" maxlength="5000" data-hw-text required></textarea></label></div>';
     }
-    return fields;
+    var head = '<div class="hw-quiz-head">'
+      + '<p class="hw-quiz-count" data-hw-progress-text aria-live="polite">' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '</p>'
+      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0"><span></span></div>'
+      + '<p class="hw-help">' + h(t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.')) + '</p>'
+      + '</div>'
+      + '<div class="hw-draft" data-hw-draft hidden><span>' + h(t('Draft restored — your earlier answers are still here.', 'تمت استعادة المسودة — إجاباتك السابقة ما زالت هنا.')) + '</span>'
+      + '<button type="button" class="btn small quiet" data-hw-draft-clear>' + h(t('Start over', 'البدء من جديد')) + '</button></div>';
+    var fields = qs.map(function (q, i) {
+      var prev = previous(q.id);
+      var promptId = 'hwq-' + h(a.id) + '-' + h(q.id);
+      var described = ' aria-labelledby="' + promptId + '" aria-describedby="' + promptId + '-status"';
+      var control;
+      if (q.type === 'multiple_choice') {
+        control = '<div class="hw-choices" role="radiogroup" aria-labelledby="' + promptId + '">' + (q.options || []).map(function (o, oi) {
+          return '<label class="hw-choice"><input type="radio" name="ans_' + h(a.id) + '_' + h(q.id) + '" value="' + oi + '"' + (prev === String(oi) ? ' checked' : '') + '>'
+            + '<span class="hw-choice-letter" aria-hidden="true">' + 'ABCD'[oi] + '</span><span class="hw-choice-text">' + h(o) + '</span></label>';
+        }).join('') + '</div>';
+      } else if (q.type === 'short_answer') {
+        control = '<textarea rows="3" maxlength="5000" data-hw-answer="' + h(q.id) + '"' + described + '>' + h(prev) + '</textarea>'
+          + '<p class="hw-counter" data-hw-counter-for="' + h(q.id) + '">0 / 5000</p>';
+      } else {
+        control = '<input maxlength="5000" data-hw-answer="' + h(q.id) + '" value="' + h(prev) + '"' + described + ' autocomplete="off" autocapitalize="off" spellcheck="false">';
+      }
+      var marked = q.type === 'short_answer' ? t('Marked by your teacher', 'يصححه معلمك') : t('Marked automatically', 'يُصحح تلقائيًا');
+      return '<div class="hw-question" data-hw-q="' + h(q.id) + '">'
+        + '<p class="hw-question-prompt" id="' + promptId + '"><span class="hw-question-no" aria-hidden="true">' + (i + 1) + '</span>'
+        + '<span class="hw-question-text">' + h(q.prompt) + '</span></p>'
+        + '<p class="hw-q-meta"><span class="hw-type">' + h(hwTypeLabel(q.type)) + '</span> <span class="hw-q-auto">' + h(marked) + '</span></p>'
+        + control
+        + '<p class="hw-q-status" id="' + promptId + '-status" data-hw-q-status hidden></p></div>';
+    }).join('');
+    return head + fields;
   }
   // One place binds the submit handlers for every homework form on the page,
   // including the forms rendered inside an opened homework.
+  // --- Answer sheet: progress, validation and the saved draft ---
+  function hwAnswerValue(form, a, q) {
+    if (q.type === 'multiple_choice') {
+      var checked = form.querySelector('input[name="ans_' + a.id + '_' + q.id + '"]:checked');
+      return checked ? checked.value : '';
+    }
+    var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
+    return input ? input.value.trim() : '';
+  }
+  function hwDraftKey(id) { return 'bbc-hw-draft:' + id; }
+  function hwDraftClear(id) { try { localStorage.removeItem(hwDraftKey(id)); } catch (e) { /* storage blocked */ } }
+  function hwDraftRead(a) {
+    try {
+      var raw = localStorage.getItem(hwDraftKey(a.id));
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || !d.answers) return null;
+      // A changed question set makes an old draft meaningless.
+      if (d.qids !== (a.questions || []).map(function (q) { return q.id; }).join(',')) return null;
+      return d;
+    } catch (e) { return null; }
+  }
+  function hwDraftWrite(form, a) {
+    try {
+      var answers = {};
+      var any = false;
+      (a.questions || []).forEach(function (q) {
+        answers[q.id] = hwAnswerValue(form, a, q);
+        if (answers[q.id]) any = true;
+      });
+      if (!any) { hwDraftClear(a.id); return; }
+      localStorage.setItem(hwDraftKey(a.id), JSON.stringify({
+        qids: (a.questions || []).map(function (q) { return q.id; }).join(','),
+        answers: answers, at: Date.now()
+      }));
+    } catch (e) { /* storage full or blocked: sending still works */ }
+  }
+
+  function hwCountAnswer(input) {
+    if (!input.form) return;
+    var counter = input.form.querySelector('[data-hw-counter-for="' + input.getAttribute('data-hw-answer') + '"]');
+    if (counter) counter.textContent = input.value.length + ' / 5000';
+  }
+  function hwUpdateProgress(form, a) {
+    var total = (a.questions || []).length;
+    var done = 0;
+    (a.questions || []).forEach(function (q) { if (hwAnswerValue(form, a, q)) done++; });
+    var bar = form.querySelector('[data-hw-progress]');
+    if (bar) {
+      bar.setAttribute('aria-valuenow', String(done));
+      var fill = bar.querySelector('span');
+      if (fill) fill.style.width = (total ? Math.round((done / total) * 100) : 0) + '%';
+    }
+    var label = form.querySelector('[data-hw-progress-text]');
+    if (label) label.textContent = t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+    return done;
+  }
+  function hwValidate(form, a) {
+    var missing = [];
+    (a.questions || []).forEach(function (q) {
+      var box = form.querySelector('[data-hw-q="' + q.id + '"]');
+      if (hwAnswerValue(form, a, q)) return;
+      missing.push(box);
+      if (!box) return;
+      box.classList.add('is-missing');
+      var status = box.querySelector('[data-hw-q-status]');
+      if (status) { status.hidden = false; status.textContent = t('Answer this question before submitting.', 'أجب عن هذا السؤال قبل التسليم.'); }
+    });
+    if (!missing.length) return true;
+    toast(t('Answer all questions first — ' + missing.length + ' still empty.', 'أجب عن كل الأسئلة أولًا — ' + missing.length + ' بلا إجابة.'), 'error');
+    var first = missing[0];
+    if (first) {
+      first.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      var field = first.querySelector('input, textarea');
+      if (field) field.focus({ preventScroll: true });
+    }
+    return false;
+  }
+
+  function hwRestoreDraft(form, a) {
+    var d = hwDraftRead(a);
+    if (!d) return false;
+    (a.questions || []).forEach(function (q) {
+      var value = d.answers[q.id];
+      if (!value) return;
+      if (q.type === 'multiple_choice') {
+        var radio = form.querySelector('input[name="ans_' + a.id + '_' + q.id + '"][value="' + value + '"]');
+        if (radio) radio.checked = true;
+      } else {
+        var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
+        if (input) { input.value = value; hwCountAnswer(input); }
+      }
+    });
+    return true;
+  }
+  function hwBindAnswerSheet(form, a) {
+    if (!(a.questions || []).length) return;
+    var onEdit = function (e) {
+      var box = e.target.closest('[data-hw-q]');
+      if (box) {
+        box.classList.remove('is-missing');
+        var status = box.querySelector('[data-hw-q-status]');
+        if (status) { status.hidden = true; status.textContent = ''; }
+      }
+      var choice = e.target.closest('.hw-choice');
+      if (choice) form.querySelectorAll('.hw-choice').forEach(function (c) { c.classList.toggle('is-selected', c === choice); });
+      if (e.target.hasAttribute && e.target.hasAttribute('data-hw-answer')) hwCountAnswer(e.target);
+      hwUpdateProgress(form, a);
+      // Save shortly after typing stops, not on every keystroke.
+      clearTimeout(form.__hwDraftTimer);
+      form.__hwDraftTimer = setTimeout(function () { hwDraftWrite(form, a); }, 400);
+    };
+    form.addEventListener('input', onEdit);
+    form.addEventListener('change', onEdit);
+    var restored = hwRestoreDraft(form, a);
+    form.querySelectorAll('input[type="radio"]:checked').forEach(function (radio) {
+      var label = radio.closest('.hw-choice');
+      if (label) label.classList.add('is-selected');
+    });
+    var note = form.querySelector('[data-hw-draft]');
+    if (note) {
+      if (restored) note.hidden = false;
+      var clear = note.querySelector('[data-hw-draft-clear]');
+      if (clear) clear.addEventListener('click', function () {
+        hwDraftClear(a.id);
+        form.reset();
+        form.querySelectorAll('.hw-choice').forEach(function (c) { c.classList.remove('is-selected'); });
+        form.querySelectorAll('[data-hw-answer]').forEach(hwCountAnswer);
+        note.hidden = true;
+        hwUpdateProgress(form, a);
+        toast(t('Saved answers cleared.', 'تم مسح الإجابات المحفوظة.'), 'success');
+      });
+    }
+    if (restored) toast(t('Your saved answers were restored.', 'تمت استعادة إجاباتك المحفوظة.'), 'success');
+    hwUpdateProgress(form, a);
+  }
+
   function bindHomeworkForms(root, asg) {
     root.querySelectorAll('[data-hw-form]').forEach(function (form) {
+      var id = form.dataset.hwForm;
+      var assignment = null;
+      asg.forEach(function (a) { if (a.id === id) assignment = a; });
+      if (!assignment) return;
+      hwBindAnswerSheet(form, assignment);
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        var id = form.dataset.hwForm;
-        var assignment = null;
-        asg.forEach(function (a) { if (a.id === id) assignment = a; });
-        if (!assignment) return;
         var body;
         if ((assignment.questions || []).length) {
-          var answers = assignment.questions.map(function (q) {
-            var value = '';
-            if (q.type === 'multiple_choice') {
-              var checked = form.querySelector('input[name="ans_' + id + '_' + q.id + '"]:checked');
-              value = checked ? checked.value : '';
-            } else {
-              var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
-              value = input ? input.value.trim() : '';
-            }
-            return { question_id: q.id, answer: value };
-          });
-          if (!answers.some(function (x) { return x.answer; })) { toast(t('Answer at least one question.', 'أجب عن سؤال واحد على الأقل.'), 'error'); return; }
-          body = { assignment_id: id, answers: answers };
+          // Reliable submission: every question is answered, so auto-marking
+          // never records a blank as a wrong answer by accident.
+          if (!hwValidate(form, assignment)) return;
+          body = { assignment_id: id, answers: assignment.questions.map(function (q) {
+            return { question_id: q.id, answer: hwAnswerValue(form, assignment, q) };
+          }) };
         } else {
           var text = form.querySelector('[data-hw-text]');
-          if (!text || !text.value.trim()) { toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error'); return; }
+          if (!text || !text.value.trim()) {
+            toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error');
+            if (text) text.focus();
+            return;
+          }
           body = { assignment_id: id, content_text: text.value.trim() };
         }
         var sbtn = form.querySelector('button[type="submit"]');
-        setBusy(sbtn, true);
+        setBusy(sbtn, true, 'Sending…', 'جارٍ الإرسال…');
         try {
           await api.req('/api/submissions', { method: 'POST', body: body });
+          hwDraftClear(id);
           toast(t('Homework submitted.', 'تم تسليم الواجب.'), 'success');
           refreshCurrent();
         } catch (err) { toast(err.message, 'error'); setBusy(sbtn, false); }
@@ -730,10 +882,13 @@
           + (mine || written || '<p class="muted">—</p>')
           + '</div>';
       }
-      return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head
+      var submittedNote = a.submission
+        ? '<p class="hw-submitted-note">' + h(t('You have submitted this homework. You can revise your answers and send them again; your teacher confirms the final grade.', 'لقد سلّمت هذا الواجب. يمكنك تعديل إجاباتك وإرسالها مجددًا، ويؤكد معلمك الدرجة النهائية.')) + '</p>'
+        : '';
+      return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head + submittedNote
         + (a.has_file ? '<p>' + hwFileButton(a) + '</p>' : '')
         + hwAnswerFields(a) + hwAutoNote(a)
-        + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button></form>';
+        + '<button class="btn small" type="submit">' + h(a.submission ? t('Send updated answers', 'إرسال الإجابات المحدثة') : t('Submit homework', 'تسليم الواجب')) + '</button></form>';
     }
     function fillDetail() {
       var parts = (location.hash || '').replace(/^#/, '').split('/');
