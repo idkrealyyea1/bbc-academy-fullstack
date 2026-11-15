@@ -12,29 +12,62 @@
   var currentMe = null;
   function toast(msg, kind) {
     var wrap = document.getElementById('dashToastWrap');
-    if (!wrap) { wrap = document.createElement('div'); wrap.id = 'dashToastWrap'; wrap.className = 'dash-toast-wrap'; wrap.setAttribute('aria-live', 'polite'); document.body.appendChild(wrap); }
+    if (!wrap) { wrap = document.createElement('div'); wrap.id = 'dashToastWrap'; wrap.className = 'dash-toast-wrap'; wrap.setAttribute('aria-live', 'polite'); wrap.setAttribute('role', 'status'); document.body.appendChild(wrap); }
+    // Repeating the same result (double click, retry) should not stack copies.
+    var last = wrap.lastElementChild;
+    if (last && last.dataset.msg === String(msg) && last.dataset.kind === String(kind || '')) return;
     var el = document.createElement('div');
     el.className = 'dash-toast' + (kind ? ' ' + kind : '');
-    el.textContent = msg;
+    el.dataset.msg = String(msg);
+    el.dataset.kind = String(kind || '');
+    el.innerHTML = '<span class="dash-toast-icon" aria-hidden="true">' + (kind === 'error' ? '!' : kind === 'success' ? '✓' : 'i') + '</span>'
+      + '<span class="dash-toast-msg"></span>'
+      + '<button type="button" class="dash-toast-close" aria-label="' + h(t('Dismiss', 'إغلاق')) + '">×</button>';
+    el.querySelector('.dash-toast-msg').textContent = msg;
+    var timer = setTimeout(function () { el.remove(); }, 6000);
+    el.querySelector('.dash-toast-close').addEventListener('click', function () { clearTimeout(timer); el.remove(); });
+    // Give people time to read an error instead of snatching it away mid-sentence.
+    el.addEventListener('mouseenter', function () { clearTimeout(timer); });
+    el.addEventListener('mouseleave', function () { timer = setTimeout(function () { el.remove(); }, 3000); });
     wrap.appendChild(el);
-    setTimeout(function () { el.remove(); }, 4200);
   }
   function confirmDlg(titleEn, titleAr, bodyEn, bodyAr) {
+    var opener = document.activeElement;
     return new Promise(function (resolve) {
       var back = document.createElement('div');
       back.className = 'dash-dialog-backdrop';
-      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-label="' + h(t(titleEn, titleAr)) + '"><h2 class="dash-dialog-title">' + h(t(titleEn, titleAr)) + '</h2><p>' + h(t(bodyEn, bodyAr)) + '</p>'
+      back.innerHTML = '<div class="dash-dialog" role="dialog" aria-modal="true" aria-labelledby="dashDlgTitle" aria-describedby="dashDlgBody">'
+        + '<h2 class="dash-dialog-title" id="dashDlgTitle">' + h(t(titleEn, titleAr)) + '</h2><p id="dashDlgBody">' + h(t(bodyEn, bodyAr)) + '</p>'
         + '<div class="dash-dialog-actions"><button class="btn danger" type="button" id="dashDlgOk">' + h(t('Delete', 'حذف')) + '</button>'
         + '<button class="btn quiet" type="button" id="dashDlgCancel">' + h(t('Cancel', 'إلغاء')) + '</button></div></div>';
       document.body.appendChild(back);
       var ok = back.querySelector('#dashDlgOk'), cancel = back.querySelector('#dashDlgCancel');
-      var done = function (v) { back.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
-      var onKey = function (e) { if (e.key === 'Escape') done(false); };
+      var done = function (v) {
+        back.remove();
+        document.removeEventListener('keydown', onKey);
+        // Put focus back where the person was, not at the top of the page.
+        // Deferred: removing the focused dialog makes the browser park focus
+        // on <body> after this function returns.
+        setTimeout(function () {
+          if (opener && opener.focus && document.contains(opener)) opener.focus();
+        }, 0);
+        resolve(v);
+      };
+      var onKey = function (e) {
+        if (e.key === 'Escape') done(false);
+        // Keep Tab inside the dialog instead of walking the page behind it.
+        if (e.key === 'Tab') {
+          var first = ok, last = cancel;
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      }
       document.addEventListener('keydown', onKey);
       back.addEventListener('click', function (e) { if (e.target === back) done(false); });
       ok.addEventListener('click', function () { done(true); });
       cancel.addEventListener('click', function () { done(false); });
-      ok.focus();
+      // Cancel is the focused default: a stray Enter must not delete a record.
+      cancel.focus();
     });
   }
   function badge(status) {
@@ -73,15 +106,73 @@
     if (!found) return code || '—';
     return found.code + ' — ' + (lang === 'ar' ? found.name_ar || found.name_en : found.name_en);
   }
-  function setBusy(btn, busy) { if (btn) btn.disabled = !!busy; }
+  // A click must always answer: the button shows a spinner and what it is doing,
+  // keeps its width (no layout jump) and cannot be fired twice.
+  function setBusy(btn, busy, labelEn, labelAr) {
+    if (!btn) return;
+    if (busy) {
+      if (btn.__busy) return;
+      btn.__busy = { html: btn.innerHTML, width: btn.offsetWidth };
+      btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>' + h(t(labelEn || 'Saving…', labelAr || 'جارٍ الحفظ…')) + '</span>';
+      if (btn.__busy.width) btn.style.minWidth = btn.__busy.width + 'px';
+      btn.disabled = true;
+      btn.classList.add('is-busy');
+      btn.setAttribute('aria-busy', 'true');
+    } else {
+      if (!btn.__busy) { btn.disabled = false; return; }
+      btn.innerHTML = btn.__busy.html;
+      // Keep the width reserved for the next busy state instead of dropping it.
+      btn.style.minWidth = btn.__reserveWidth ? btn.__reserveWidth + 'px' : '';
+      btn.disabled = false;
+      btn.classList.remove('is-busy');
+      btn.removeAttribute('aria-busy');
+      btn.__busy = null;
+    }
+  }
+  // A button must not grow when it goes busy: a longer busy label would shove
+  // its neighbours (the booking Confirm button grew 79px to 130px and pushed
+  // Reject ~19px). Locking the width at click time is not the answer either —
+  // the busy label would not fit and would spill out of the button. So measure
+  // the busy label once, offscreen, while the button is at rest, and reserve
+  // that width up front. The probe is measured inside the visible view so the
+  // dashboard's scoped button styles apply to it.
+  function reserveBusyWidth(btn, labelEn, labelAr) {
+    if (!btn || btn.__busyReserved || btn.classList.contains('is-busy')) return;
+    var host = content.querySelector('.dash-view:not([hidden])') || document.body;
+    var probe = document.createElement('button');
+    probe.type = 'button';
+    // Replicate the busy state itself: the spinner only gets its size from
+    // `.btn.is-busy .btn-spinner`, so a probe without that class measures
+    // ~6px short and the button still grows.
+    probe.className = btn.className + ' is-busy';
+    probe.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>' + h(t(labelEn || 'Saving…', labelAr || 'جارٍ الحفظ…')) + '</span>';
+    probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;pointer-events:none;';
+    host.appendChild(probe);
+    var w = probe.offsetWidth;
+    host.removeChild(probe);
+    if (w > 0) { btn.style.minWidth = w + 'px'; btn.__reserveWidth = w; }
+    btn.__busyReserved = true;
+  }
   async function refreshCurrent() {
     if (!currentMe) return;
-    if (role === 'student') await renderStudent(currentMe);
-    else if (role === 'teacher') await renderTeacher(currentMe);
-    else if (role === 'staff') await renderStaff(currentMe);
-    else await renderAdmin(currentMe);
+    // A save re-renders the page; keep the reader where they were standing
+    // instead of throwing them back to the top of a long list.
+    var scrollY = window.scrollY || window.pageYOffset || 0;
+    try {
+      if (role === 'student') await renderStudent(currentMe);
+      else if (role === 'teacher') await renderTeacher(currentMe);
+      else if (role === 'staff') await renderStaff(currentMe);
+      else await renderAdmin(currentMe);
+    } catch (err) {
+      // The save went through but the refresh did not: keep the page usable
+      // instead of leaving a button stuck on "Saving…" forever.
+      content.querySelectorAll('.btn.is-busy').forEach(function (b) { setBusy(b, false); });
+      toast(err.message, 'error');
+      return;
+    }
     accountCard();
     showView(false);
+    if (scrollY) requestAnimationFrame(function () { window.scrollTo(0, scrollY); });
   }
   window.__onLangChange = function () { if (ready) location.reload(); };
 
@@ -92,8 +183,12 @@
   // on a phone the table keeps its full width (no crushed/wrapped columns,
   // no cut-off action buttons) and the user scrolls it inside the viewport.
   // The hint below the table is shown on narrow screens only (see dashboard.css).
+  // An empty area should say what to do next, not just that it is empty.
+  function emptyState(text, actionHtml) {
+    return '<div class="dash-empty"><p>' + h(text) + '</p>' + (actionHtml ? '<div class="dash-empty-action">' + actionHtml + '</div>' : '') + '</div>';
+  }
   function table(headers, rows, emptyText) {
-    if (!rows.length) return '<div class="dash-empty"><p>' + h(emptyText) + '</p></div>';
+    if (!rows.length) return emptyState(emptyText);
     return '<div class="dash-table-scroll" tabindex="0" role="region" aria-label="' + h(t('Table', 'جدول')) + '"><table><tr>' + headers.map(function (x) { return '<th>' + h(x) + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>';
   }
   /* ----- Homework: the teacher either attaches a file or writes questions ---
@@ -143,7 +238,7 @@
   function bindHomeworkFileButtons(scope) {
     (scope || content).querySelectorAll('[data-hw-file]').forEach(function (b) {
       b.addEventListener('click', async function () {
-        setBusy(b, true);
+        setBusy(b, true, 'Opening…', 'جارٍ الفتح…');
         try { await openHomeworkFile(b.dataset.hwFile, b.dataset.hwName); }
         catch (err) { toast(err.message, 'error'); }
         setBusy(b, false);
@@ -243,6 +338,50 @@
     return a.submission && a.submission.submitted_late
       ? '<span class="badge badge-late">' + h(t('Late', 'متأخر')) + '</span>' : '';
   }
+  // A deadline is the thing students actually miss. Compare calendar dates in
+  // local time instead of parsing a timestamp, so a due date never shifts by
+  // the visitor's timezone.
+  function hwDueInfo(a) {
+    if (!a.due_date || a.submission) return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(a.due_date));
+    if (!m) return null;
+    var due = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(due.getTime())) return null;
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var days = Math.round((due - today) / 86400000);
+    return { days: days, state: days < 0 ? 'overdue' : (days === 0 ? 'today' : (days <= 3 ? 'soon' : 'later')) };
+  }
+  function hwDueChip(a) {
+    var info = hwDueInfo(a);
+    if (!info || info.state === 'later') return '';
+    var label;
+    if (info.state === 'overdue') {
+      var late = -info.days;
+      label = late === 1 ? t('1 day overdue', 'متأخر يومًا واحدًا')
+        : late === 2 ? t('2 days overdue', 'متأخر يومين')
+          : late <= 10 ? t(late + ' days overdue', 'متأخر ' + late + ' أيام')
+          : t(late + ' days overdue', 'متأخر ' + late + ' يومًا');
+    } else if (info.state === 'today') {
+      label = t('Due today', 'التسليم اليوم');
+    } else {
+      label = info.days === 1 ? t('Due tomorrow', 'التسليم غدًا')
+        : info.days === 2 ? t('Due in 2 days', 'التسليم بعد يومين')
+          : t('Due in 3 days', 'التسليم بعد 3 أيام');
+    }
+    return '<span class="badge ' + (info.state === 'overdue' ? 'hw-due-overdue' : 'hw-due-soon') + '">' + h(label) + '</span>';
+  }
+  // Work still to hand in first, then the nearest deadline, then undated work.
+  function hwSortByDue(list) {
+    return list.slice().sort(function (a, b) {
+      var handed = (a.submission ? 1 : 0) - (b.submission ? 1 : 0);
+      if (handed) return handed;
+      var ax = a.due_date || '9999-12-31';
+      var bx = b.due_date || '9999-12-31';
+      if (ax === bx) return 0;
+      return ax < bx ? -1 : 1;
+    });
+  }
   function hwAutoNote(a) {
     return a.submission && a.submission.auto_total
       ? '<p class="muted small">' + h(t('Auto-marked: ', 'التصحيح التلقائي: ') + a.submission.auto_score + ' / ' + a.submission.auto_total + t('. Your teacher confirms the final grade.', '. درجتك النهائية يحددها معلمك.')) + '</p>'
@@ -261,7 +400,9 @@
       return '<li>' + prompt + h(shown) + '</li>';
     }).join('') + '</ol>';
   }
-  // Question controls (or the written-answer box) for one assignment.
+  // The student's answer sheet: one calm card per question, a live meter of how
+  // much is done, and a draft saved on this device. A refresh, a phone call or a
+  // dead battery must never cost a student their answers.
   function hwAnswerFields(a) {
     var qs = a.questions || [];
     var mine = (a.submission && a.submission.answers) || [];
@@ -269,63 +410,249 @@
       var found = mine.filter(function (x) { return x.question_id === qid; })[0];
       return found ? String(found.answer == null ? '' : found.answer) : '';
     }
-    var fields;
-    if (qs.length) {
-      fields = qs.map(function (q, i) {
-        var prev = previous(q.id);
-        var control;
-        if (q.type === 'multiple_choice') {
-          control = '<div class="hw-choices">' + (q.options || []).map(function (o, oi) {
-            return '<label class="hw-choice"><input type="radio" name="ans_' + h(a.id) + '_' + h(q.id) + '" value="' + oi + '"' + (prev === String(oi) ? ' checked' : '') + '> <span>' + h(o) + '</span></label>';
-          }).join('') + '</div>';
-        } else if (q.type === 'short_answer') {
-          control = '<textarea rows="2" maxlength="5000" data-hw-answer="' + h(q.id) + '">' + h(prev) + '</textarea>';
-        } else {
-          control = '<input maxlength="5000" data-hw-answer="' + h(q.id) + '" value="' + h(prev) + '">';
-        }
-        return '<div class="hw-question"><p class="hw-question-prompt"><span class="hw-question-no">' + (i + 1) + '.</span> ' + h(q.prompt)
-          + ' <span class="hw-type">' + h(hwTypeLabel(q.type)) + '</span></p>' + control + '</div>';
-      }).join('');
-    } else {
-      fields = (a.has_file ? '<p class="muted">' + h(t('Do the homework in the file, then write your answer here.', 'حل الواجب في الملف ثم اكتب إجابتك هنا.')) + '</p>' : '')
+    if (!qs.length) {
+      return (a.has_file ? '<p class="muted">' + h(t('Do the homework in the file, then write your answer here.', 'حل الواجب في الملف ثم اكتب إجابتك هنا.')) + '</p>' : '')
         + '<div class="field"><label>' + h(t('Your answer', 'إجابتك')) + ' <textarea rows="3" maxlength="5000" data-hw-text required></textarea></label></div>';
     }
-    return fields;
+    var head = '<div class="hw-quiz-head">'
+      + '<div class="hw-quiz-top">'
+      + '<div><p class="hw-quiz-eyebrow">' + h(t('Answer sheet', 'ورقة الإجابة')) + '</p>'
+      + '<p class="hw-quiz-count" data-hw-progress-text aria-live="polite">' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '</p></div>'
+      + '</div>'
+      + '<div class="hw-progress" data-hw-progress role="progressbar" aria-label="' + h(t('Questions answered', 'الأسئلة المُجابة')) + '" aria-valuemin="0" aria-valuemax="' + qs.length + '" aria-valuenow="0" aria-valuetext="' + h(t('0 of ' + qs.length + ' answered', '0 من ' + qs.length + ' مُجابة')) + '"><span class="hw-progress-fill"></span></div>'
+      + '<p class="hw-help" data-hw-help>' + h(t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.')) + '</p>'
+      + '</div>'
+      + '<div class="hw-draft" data-hw-draft hidden><span>' + h(t('Draft restored — your earlier answers are still here.', 'تمت استعادة المسودة — إجاباتك السابقة ما زالت هنا.')) + '</span>'
+      + '<button type="button" class="btn small quiet" data-hw-draft-clear>' + h(t('Start over', 'البدء من جديد')) + '</button></div>';
+    var fields = qs.map(function (q, i) {
+      var prev = previous(q.id);
+      var promptId = 'hwq-' + h(a.id) + '-' + h(q.id);
+      var described = ' aria-labelledby="' + promptId + '" aria-describedby="' + promptId + '-status"';
+      var control;
+      if (q.type === 'multiple_choice') {
+        control = '<div class="hw-choices" role="radiogroup" aria-labelledby="' + promptId + '">' + (q.options || []).map(function (o, oi) {
+          return '<label class="hw-choice"><input type="radio" name="ans_' + h(a.id) + '_' + h(q.id) + '" value="' + oi + '"' + (prev === String(oi) ? ' checked' : '') + '>'
+            + '<span class="hw-choice-letter" aria-hidden="true">' + 'ABCD'[oi] + '</span><span class="hw-choice-text">' + h(o) + '</span></label>';
+        }).join('') + '</div>';
+      } else if (q.type === 'short_answer') {
+        control = '<textarea rows="3" maxlength="5000" data-hw-answer="' + h(q.id) + '"' + described + '>' + h(prev) + '</textarea>'
+          + '<p class="hw-counter" data-hw-counter-for="' + h(q.id) + '">0 / 5000</p>';
+      } else {
+        control = '<input maxlength="5000" data-hw-answer="' + h(q.id) + '" value="' + h(prev) + '"' + described + ' autocomplete="off" autocapitalize="off" spellcheck="false">';
+      }
+      var marked = q.type === 'short_answer' ? t('Marked by your teacher', 'يصححه معلمك') : t('Marked automatically', 'يُصحح تلقائيًا');
+      return '<div class="hw-question" data-hw-q="' + h(q.id) + '" style="--i:' + Math.min(i, 6) + '">'
+        + '<p class="hw-question-prompt" id="' + promptId + '"><span class="hw-question-no" aria-hidden="true">' + (i + 1) + '</span>'
+        + '<span class="hw-question-text">' + h(q.prompt) + '</span></p>'
+        + '<p class="hw-q-meta"><span class="hw-type">' + h(hwTypeLabel(q.type)) + '</span> <span class="hw-q-auto">' + h(marked) + '</span></p>'
+        + control
+        + '<p class="hw-q-status" id="' + promptId + '-status" data-hw-q-status hidden></p></div>';
+    }).join('');
+    return head + fields;
   }
   // One place binds the submit handlers for every homework form on the page,
   // including the forms rendered inside an opened homework.
+  // --- Answer sheet: progress, validation and the saved draft ---
+  function hwAnswerValue(form, a, q) {
+    if (q.type === 'multiple_choice') {
+      var checked = form.querySelector('input[name="ans_' + a.id + '_' + q.id + '"]:checked');
+      return checked ? checked.value : '';
+    }
+    var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
+    return input ? input.value.trim() : '';
+  }
+  function hwDraftKey(id) { return 'bbc-hw-draft:' + id; }
+  function hwDraftClear(id) { try { localStorage.removeItem(hwDraftKey(id)); } catch (e) { /* storage blocked */ } }
+  function hwDraftRead(a) {
+    try {
+      var raw = localStorage.getItem(hwDraftKey(a.id));
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || !d.answers) return null;
+      if (!d.at || Date.now() - d.at > 30 * 24 * 60 * 60 * 1000) { hwDraftClear(a.id); return null; }
+      // A changed question set makes an old draft meaningless.
+      if (d.qids !== (a.questions || []).map(function (q) { return q.id; }).join(',')) return null;
+      return d;
+    } catch (e) { return null; }
+  }
+  function hwDraftWrite(form, a) {
+    try {
+      var answers = {};
+      var any = false;
+      (a.questions || []).forEach(function (q) {
+        answers[q.id] = hwAnswerValue(form, a, q);
+        if (answers[q.id]) any = true;
+      });
+      if (!any) { hwDraftClear(a.id); return; }
+      localStorage.setItem(hwDraftKey(a.id), JSON.stringify({
+        qids: (a.questions || []).map(function (q) { return q.id; }).join(','),
+        answers: answers, at: Date.now()
+      }));
+    } catch (e) { /* storage full or blocked: sending still works */ }
+  }
+
+  function hwCountAnswer(input) {
+    if (!input.form) return;
+    var counter = input.form.querySelector('[data-hw-counter-for="' + input.getAttribute('data-hw-answer') + '"]');
+    if (counter) counter.textContent = input.value.length + ' / 5000';
+  }
+  function hwUpdateProgress(form, a) {
+    var qs = a.questions || [];
+    var total = qs.length;
+    var flags = qs.map(function (q) { return hwAnswerValue(form, a, q) ? '1' : '0'; });
+    var done = flags.filter(function (f) { return f === '1'; }).length;
+    var sig = flags.join('');
+    // Typing that changes no answered/empty state must touch nothing: the count
+    // is an aria-live region and would otherwise re-announce.
+    if (form.__hwSig === sig && form.__hwTotal === total) return done;
+    form.__hwSig = sig;
+    form.__hwTotal = total;
+    var all = total > 0 && done === total;
+    var bar = form.querySelector('[data-hw-progress]');
+    if (bar) {
+      var spoken = t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+      bar.setAttribute('aria-valuenow', String(done));
+      bar.setAttribute('aria-valuetext', spoken);
+      var fill = bar.querySelector('.hw-progress-fill');
+      // scaleX stays on the compositor; no layout per frame on a weak phone.
+      if (fill) fill.style.transform = 'scaleX(' + (total ? (done / total) : 0) + ')';
+    }
+    qs.forEach(function (q, i) {
+      var box = form.querySelector('[data-hw-q="' + q.id + '"]');
+      if (box) box.classList.toggle('is-answered', flags[i] === '1');
+    });
+    form.classList.toggle('is-complete', all);
+    var head = form.querySelector('.hw-quiz-head');
+    if (head) head.classList.toggle('is-complete', all);
+    var label = form.querySelector('[data-hw-progress-text]');
+    if (label) label.textContent = all
+      ? t('All ' + total + ' answered — ready to send', 'اكتملت كل الأسئلة — جاهز للإرسال')
+      : t(done + ' of ' + total + ' answered', done + ' من ' + total + ' مُجابة');
+    var help = form.querySelector('[data-hw-help]');
+    if (help) help.textContent = all
+      ? t('Everything is answered. Send it when you are ready.', 'كل الأسئلة مُجابة. أرسلها عندما تكون جاهزًا.')
+      : (total - done === 1 ? t('One question left.', 'بقي سؤال واحد.')
+        : t('Answer every question, then submit. Your answers are saved on this device until you send them.', 'أجب عن كل الأسئلة ثم أرسل. تُحفظ إجاباتك على هذا الجهاز حتى ترسلها.'));
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn && !btn.__busy && !a.submission) {
+      btn.textContent = all ? t('Send all ' + total + ' answers', 'إرسال كل الإجابات') : t('Submit homework', 'تسليم الواجب');
+    }
+    return done;
+  }
+
+  function hwValidate(form, a) {
+    var missing = [];
+    (a.questions || []).forEach(function (q) {
+      var box = form.querySelector('[data-hw-q="' + q.id + '"]');
+      if (hwAnswerValue(form, a, q)) return;
+      missing.push(box);
+      if (!box) return;
+      box.classList.add('is-missing');
+      var status = box.querySelector('[data-hw-q-status]');
+      if (status) { status.hidden = false; status.textContent = t('Answer this question before submitting.', 'أجب عن هذا السؤال قبل التسليم.'); }
+    });
+    if (!missing.length) return true;
+    toast(t('Answer all questions first — ' + missing.length + ' still empty.', 'أجب عن كل الأسئلة أولًا — ' + missing.length + ' بلا إجابة.'), 'error');
+    var first = missing[0];
+    if (first) {
+      first.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      var field = first.querySelector('input, textarea');
+      if (field) field.focus({ preventScroll: true });
+    }
+    return false;
+  }
+
+  function hwRestoreDraft(form, a) {
+    var d = hwDraftRead(a);
+    if (!d) return false;
+    (a.questions || []).forEach(function (q) {
+      var value = d.answers[q.id];
+      if (!value) return;
+      if (q.type === 'multiple_choice') {
+        var radio = form.querySelector('input[name="ans_' + a.id + '_' + q.id + '"][value="' + value + '"]');
+        if (radio) radio.checked = true;
+      } else {
+        var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
+        if (input) { input.value = value; hwCountAnswer(input); }
+      }
+    });
+    return true;
+  }
+  function hwBindAnswerSheet(form, a) {
+    if (!(a.questions || []).length) return;
+    var onEdit = function (e) {
+      var box = e.target.closest('[data-hw-q]');
+      if (box) {
+        box.classList.remove('is-missing');
+        var status = box.querySelector('[data-hw-q-status]');
+        if (status) { status.hidden = true; status.textContent = ''; }
+      }
+      var choice = e.target.closest('.hw-choice');
+      if (choice) form.querySelectorAll('.hw-choice').forEach(function (c) { c.classList.toggle('is-selected', c === choice); });
+      if (e.target.hasAttribute && e.target.hasAttribute('data-hw-answer')) hwCountAnswer(e.target);
+      hwUpdateProgress(form, a);
+      // Save shortly after typing stops, not on every keystroke.
+      clearTimeout(form.__hwDraftTimer);
+      form.__hwDraftTimer = setTimeout(function () { hwDraftWrite(form, a); }, 400);
+    };
+    form.addEventListener('input', onEdit);
+    form.addEventListener('change', onEdit);
+    var restored = hwRestoreDraft(form, a);
+    form.querySelectorAll('[data-hw-answer]').forEach(hwCountAnswer);
+    form.querySelectorAll('input[type="radio"]:checked').forEach(function (radio) {
+      var label = radio.closest('.hw-choice');
+      if (label) label.classList.add('is-selected');
+    });
+    var note = form.querySelector('[data-hw-draft]');
+    if (note) {
+      if (restored) note.hidden = false;
+      var clear = note.querySelector('[data-hw-draft-clear]');
+      if (clear) clear.addEventListener('click', function () {
+        hwDraftClear(a.id);
+        form.reset();
+        form.querySelectorAll('.hw-choice').forEach(function (c) { c.classList.remove('is-selected'); });
+        form.querySelectorAll('[data-hw-answer]').forEach(hwCountAnswer);
+        note.hidden = true;
+        hwUpdateProgress(form, a);
+        toast(t('Saved answers cleared.', 'تم مسح الإجابات المحفوظة.'), 'success');
+      });
+    }
+    if (restored) toast(t('Your saved answers were restored.', 'تمت استعادة إجاباتك المحفوظة.'), 'success');
+    hwUpdateProgress(form, a);
+  }
+
   function bindHomeworkForms(root, asg) {
     root.querySelectorAll('[data-hw-form]').forEach(function (form) {
+      var id = form.dataset.hwForm;
+      var assignment = null;
+      asg.forEach(function (a) { if (a.id === id) assignment = a; });
+      if (!assignment) return;
+      hwBindAnswerSheet(form, assignment);
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        var id = form.dataset.hwForm;
-        var assignment = null;
-        asg.forEach(function (a) { if (a.id === id) assignment = a; });
-        if (!assignment) return;
+        clearTimeout(form.__hwDraftTimer);
         var body;
         if ((assignment.questions || []).length) {
-          var answers = assignment.questions.map(function (q) {
-            var value = '';
-            if (q.type === 'multiple_choice') {
-              var checked = form.querySelector('input[name="ans_' + id + '_' + q.id + '"]:checked');
-              value = checked ? checked.value : '';
-            } else {
-              var input = form.querySelector('[data-hw-answer="' + q.id + '"]');
-              value = input ? input.value.trim() : '';
-            }
-            return { question_id: q.id, answer: value };
-          });
-          if (!answers.some(function (x) { return x.answer; })) { toast(t('Answer at least one question.', 'أجب عن سؤال واحد على الأقل.'), 'error'); return; }
-          body = { assignment_id: id, answers: answers };
+          // Reliable submission: every question is answered, so auto-marking
+          // never records a blank as a wrong answer by accident.
+          if (!hwValidate(form, assignment)) return;
+          body = { assignment_id: id, answers: assignment.questions.map(function (q) {
+            return { question_id: q.id, answer: hwAnswerValue(form, assignment, q) };
+          }) };
         } else {
           var text = form.querySelector('[data-hw-text]');
-          if (!text || !text.value.trim()) { toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error'); return; }
+          if (!text || !text.value.trim()) {
+            toast(t('Write your answer first.', 'اكتب إجابتك أولًا.'), 'error');
+            if (text) text.focus();
+            return;
+          }
           body = { assignment_id: id, content_text: text.value.trim() };
         }
         var sbtn = form.querySelector('button[type="submit"]');
-        setBusy(sbtn, true);
+        setBusy(sbtn, true, 'Sending…', 'جارٍ الإرسال…');
         try {
           await api.req('/api/submissions', { method: 'POST', body: body });
+          hwDraftClear(id);
           toast(t('Homework submitted.', 'تم تسليم الواجب.'), 'success');
           refreshCurrent();
         } catch (err) { toast(err.message, 'error'); setBusy(sbtn, false); }
@@ -427,10 +754,31 @@
     var hd = target.querySelector('.dash-view-title');
     if (pt && hd) pt.textContent = hd.textContent;
     if (cr && hd) cr.textContent = hd.textContent;
+    // The tab title follows the page, so several dashboard tabs stay tellable apart.
+    if (hd) document.title = hd.textContent + ' — BBC English Academy';
+    // A short fade marks the change of page; the eye should not have to hunt.
+    if (hd && showView.lastView !== target.dataset.view) {
+      showView.lastView = target.dataset.view;
+      target.classList.remove('is-entering');
+      void target.offsetWidth;
+      target.classList.add('is-entering');
+      target.addEventListener('animationend', function () { target.classList.remove('is-entering'); }, { once: true });
+      // A new page starts at its top, not halfway down the previous one.
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    }
     if (focusIt) {
       var shellTitle = document.getElementById('appPageTitle');
       if (shellTitle) { shellTitle.tabIndex = -1; shellTitle.focus(); }
     }
+    // Reserve every action button's busy width now, while it is at rest, so no
+    // busy state ever grows a button. Links never go busy and block buttons
+    // are sized by their container, so both are skipped; buttons with an
+    // explicit busy label were already reserved where they were bound.
+    Array.prototype.forEach.call(content.querySelectorAll('.btn'), function (b) {
+      if (b.tagName === 'A' || b.classList.contains('block')) return;
+      reserveBusyWidth(b);
+    });
   }
   function wireDashChrome() {
     var btn = document.getElementById('dashMenuBtn'), sidebar = document.getElementById('dashSidebar'), nav = document.getElementById('dashNav'), scrim = document.getElementById('dashScrim');
@@ -543,7 +891,8 @@
 
 
   async function boot() {
-    content.innerHTML = '<div class="dash-skeleton" aria-label="' + h(t('Loading', 'جارٍ التحميل')) + '"></div><div class="dash-skeleton"></div>';
+    content.innerHTML = '<p class="muted small dash-loading-note" role="status">' + h(t('Loading your workspace…', 'جارٍ تحميل مساحة العمل…')) + '</p>'
+      + '<div class="dash-skeleton"></div><div class="dash-skeleton"></div>';
     if (!api || !api.base()) {
       content.innerHTML = view('overview', 'Overview', 'نظرة عامة', heading({ full_name: '' }, t('Demo mode — connect the API to use the dashboards.', 'وضع تجريبي — اربط الـ API لاستخدام لوحات التحكم.')));
       showView(false);
@@ -597,9 +946,10 @@
     // One homework as a row in a list: title, its info, status, and the way in.
     function hwRow(a) {
       var st = hwStatusOf(a);
-      return '<div class="dash-row-card" data-hw-status="' + st + '"><div class="dash-row-main"><strong>' + h(a.title) + '</strong>'
+      var due = hwDueInfo(a);
+      return '<div class="dash-row-card' + (due && due.state === 'overdue' ? ' is-overdue' : '') + '" data-hw-status="' + st + '"><div class="dash-row-main"><strong>' + h(a.title) + '</strong>'
         + '<p class="muted small">' + h(courseTitle(a.course_id)) + ' · ' + h(hwMeta(a)) + '</p></div>'
-        + '<div class="dash-row-side">' + hwStatusChip(a) + hwLateChip(a)
+        + '<div class="dash-row-side">' + hwDueChip(a) + hwStatusChip(a) + hwLateChip(a)
         + '<a class="btn small" href="#perform/' + h(a.id) + '">' + h(st === 'graded' ? t('Review homework', 'مراجعة الواجب') : t('Perform homework', 'أداء الواجب')) + '</a></div></div>';
     }
     function backLink(hash, en, ar) {
@@ -646,10 +996,13 @@
           + (mine || written || '<p class="muted">—</p>')
           + '</div>';
       }
-      return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head
+      var submittedNote = a.submission
+        ? '<p class="hw-submitted-note"><span class="hw-submitted-icon" aria-hidden="true">✓</span><span>' + h(t('You have submitted this homework. You can revise your answers and send them again; your teacher confirms the final grade.', 'لقد سلّمت هذا الواجب. يمكنك تعديل إجاباتك وإرسالها مجددًا، ويؤكد معلمك الدرجة النهائية.')) + '</span></p>'
+        : '';
+      return back + '<form class="card hw-submit" data-hw-form="' + h(a.id) + '">' + head + submittedNote
         + (a.has_file ? '<p>' + hwFileButton(a) + '</p>' : '')
         + hwAnswerFields(a) + hwAutoNote(a)
-        + '<button class="btn small" type="submit">' + h(t('Submit homework', 'تسليم الواجب')) + '</button></form>';
+        + '<button class="btn small" type="submit">' + h(a.submission ? t('Send updated answers', 'إرسال الإجابات المحدثة') : t('Submit homework', 'تسليم الواجب')) + '</button></form>';
     }
     function fillDetail() {
       var parts = (location.hash || '').replace(/^#/, '').split('/');
@@ -684,11 +1037,24 @@
         var firstEnr = enr.find(function (e) { return e.status === 'active' || e.status === 'pending'; }) || enr[0];
         var firstCourse = firstEnr ? cmap[firstEnr.course_id] : null;
         var cont = firstCourse ? '<a class="btn small" href="course.html?id=' + h(firstCourse.slug || firstCourse.id) + '">' + h(t('Continue learning', 'واصل التعلّم')) + '</a>' : '';
+        // The one piece of work to open next, with the way straight into it.
+        var nextUp = hwSortByDue(openAsg)[0];
+        var nextHtml = nextUp
+          ? '<div class="dash-nextup">'
+            + '<span class="dash-nextup-label">' + h(t('Next up', 'التالي')) + '</span>'
+            + '<strong class="dash-nextup-title">' + h(nextUp.title) + '</strong>'
+            + '<p class="muted small">' + h(courseTitle(nextUp.course_id)) + ' · ' + h(hwMeta(nextUp)) + '</p>'
+            + '<div class="dash-nextup-actions">' + hwDueChip(nextUp)
+            + '<a class="btn small" href="#perform/' + h(nextUp.id) + '">' + h(t('Start now', 'ابدأ الآن')) + '</a>'
+            + '<a class="btn small outline" href="#homework">' + h(openAsg.length === 1
+              ? t('See the homework', 'الواجب')
+              : t('All ' + openAsg.length + ' tasks', 'كل الواجبات (' + openAsg.length + ')')) + '</a>'
+            + '</div></div>'
+          : '';
         var steps = [];
         if (!place.length) steps.push('<li>' + h(t('Take the placement test to get your level.', 'أجرِ اختبار تحديد المستوى لمعرفة مستواك.')) + ' <a href="levels.html">' + h(t('Placement test', 'اختبار تحديد المستوى')) + '</a></li>');
-        if (openAsg.length) steps.push('<li>' + h(t(openAsg.length + ' homework task(s) waiting for you.', openAsg.length + ' واجب بانتظارك.')) + ' <a href="#homework">' + h(t('Open homework', 'افتح الواجبات')) + '</a></li>');
         if (!enr.length) steps.push('<li>' + h(t('You are not enrolled in any course yet. Book a seat to get started.', 'لست مسجلًا في أي دورة بعد. احجز مقعدًا للبدء.')) + ' <a href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a></li>');
-        return '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Next steps', 'الخطوات التالية')) + '</h2>' + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
+        return '<div class="card dash-next"><h2 class="dash-card-title">' + h(t('Next steps', 'الخطوات التالية')) + '</h2>' + nextHtml + (cont ? '<p>' + cont + '</p>' : '') + (steps.length ? '<ul>' + steps.join('') + '</ul>' : '<p class="muted">' + h(t('You are on track. Keep going with your enrolled courses.', 'أنت على المسار الصحيح. واصل في دوراتك المسجلة.')) + '</p>') + '</div>';
       })())
       + view('courses', 'My courses', 'دوراتي', '<div class="card">'
       + table([t('Course', 'الدورة'), t('Level', 'المستوى'), t('Status', 'الحالة'), t('Lessons', 'الدروس'), t('Assignments', 'الواجبات'), ''], enr.map(function (e) {
@@ -700,7 +1066,14 @@
       }), t('No enrolments yet.', 'لا توجد تسجيلات بعد.')) + '</div>')
       + view('progress', 'My progress', 'تقدّمي', '<div class="card"><h2 class="dash-card-title">' + h(t('Placement & level', 'تحديد المستوى')) + '</h2>'
       + (latest ? '<p>' + h(t('Latest result: ', 'آخر نتيجة: ')) + latest.score + ' / ' + latest.total + ' — ' + h(t('Recommended level: ', 'المستوى الموصى به: ')) + h(levelNameByCode(latest.recommended_level, stuLevels)) + '</p>' : '<p class="muted">' + h(t('No placement test taken yet.', 'لم تُجرَ اختبار تحديد مستوى بعد.')) + ' <a href="levels.html">' + h(t('Take the placement test', 'أجرِ اختبار تحديد المستوى')) + '</a></p>') + '</div>'
-      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance', 'الحضور')) + '</h2><p>' + h(t('Present: ', 'الحاضر: ')) + present + ' / ' + att.length + '</p><p class="muted">' + h(t('Attendance counts only records marked present, out of all recorded attendance days for you. Absent, late and excused days are not counted as present.', 'الحضور يحسب فقط الأيام المسجلة كحاضر، من مجموع أيام الحضور المسجلة لك. أيام الغياب والتأخر والعذر لا تُحسب كحاضر.')) + '</p></div>'
+      + '<div class="card"><h2 class="dash-card-title">' + h(t('Attendance', 'الحضور')) + '</h2>'
+      + (att.length
+        ? '<p class="att-rate"><strong>' + Math.round((present / att.length) * 100) + '%</strong> <span class="muted">' + h(t('present, out of ' + att.length + ' recorded days', 'حاضر خلال ' + att.length + ' أيام مسجّلة')) + '</span></p>'
+          + '<div class="att-breakdown">' + [['present', 'Present', 'حاضر'], ['late', 'Late', 'متأخر'], ['absent', 'Absent', 'غائب'], ['excused', 'Excused', 'بعذر']].map(function (s) {
+            return '<div class="att-stat"><span class="att-stat-label">' + h(t(s[1], s[2])) + '</span><strong>' + att.filter(function (x) { return x.status === s[0]; }).length + '</strong></div>';
+          }).join('') + '</div>'
+        : '<p class="muted">' + h(t('No attendance recorded yet.', 'لا يوجد حضور مسجل بعد.')) + '</p>')
+      + '<p class="muted small">' + h(t('Only the days your teacher recorded are counted.', 'تُحسب فقط الأيام التي سجلها معلمك.')) + '</p></div>'
       + '<div class="card"><h2 class="dash-card-title">' + h(t('Grades', 'الدرجات')) + '</h2>'
       + table([t('Task', 'المهمة'), t('Grade', 'الدرجة'), t('Feedback', 'ملاحظات')], asg.filter(function (a) { return a.submission && a.submission.grade != null; }).map(function (a) {
         return '<tr><td>' + h(a.title) + '</td><td>' + h(a.submission.grade) + ' / 100</td><td>' + h(a.submission.feedback || '') + '</td></tr>';
@@ -709,8 +1082,8 @@
       + ['all', 'pending', 'submitted', 'graded'].map(function (s) { return '<button type="button" data-hw-tab="' + s + '" class="' + (s === 'all' ? 'active' : '') + '">' + h(s === 'all' ? t('All', 'الكل') : s === 'pending' ? t('Pending', 'بانتظار التسليم') : s === 'submitted' ? t('Submitted', 'مُسلَّمة') : t('Graded', 'مصححة')) + '</button>'; }).join('') + '</div>'
       + '<p class="muted">' + h(t('Pick a homework to perform it. The questions open on their own page.', 'اختر واجبًا لأدائه. تُفتح الأسئلة في صفحة خاصة.')) + '</p>'
       + (asg.length
-        ? '<div class="dash-row-list">' + asg.map(hwRow).join('') + '</div>'
-        : '<div class="dash-empty"><p>' + h(t('No homework yet.', 'لا توجد واجبات بعد.')) + '</p></div>')
+        ? '<div class="dash-row-list">' + hwSortByDue(asg).map(hwRow).join('') + '</div>'
+        : emptyState(t('No homework yet.', 'لا توجد واجبات بعد.'), '<a class="btn small outline" href="booking.html">' + h(t('Book a seat', 'احجز مقعدًا')) + '</a>'))
       + '</div>')
       + view('lessons', 'Lessons', 'الدروس', '<div class="card">'
       + '<p class="muted">' + h(t('Open a lesson to see its material and the homework for its course.', 'افتح درسًا لترى مادته وواجبات دورته.')) + '</p>'
@@ -1113,11 +1486,13 @@
       if (prof) prof.addEventListener('submit', async function (e) {
         e.preventDefault();
         var f = new FormData(prof);
+        var pbtn = prof.querySelector('button[type="submit"]');
+        setBusy(pbtn, true);
         try {
           await api.req('/api/staff/students/' + s.id, { method: 'PUT', body: { full_name: f.get('full_name'), username: f.get('username'), email: f.get('email'), phone: f.get('phone') } });
           toast(t('Student details saved.', 'تم حفظ بيانات الطالب.'), 'success');
           refreshCurrent();
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { toast(err.message, 'error'); setBusy(pbtn, false); }
       });
       var pw = content.querySelector('[data-staff-password]');
       if (pw) pw.addEventListener('submit', async function (e) {
@@ -1148,21 +1523,23 @@
         b.addEventListener('click', async function () {
           var id = b.dataset.saveEnrol;
           var sel = content.querySelector('[data-enrol-status="' + id + '"]');
+          setBusy(b, true);
           try {
             await api.req('/api/staff/students/' + s.id + '/enrolments/' + id, { method: 'PUT', body: { status: sel.value } });
             toast(t('Enrolment saved.', 'تم حفظ التسجيل.'), 'success');
             refreshCurrent();
-          } catch (err) { toast(err.message, 'error'); }
+          } catch (err) { toast(err.message, 'error'); setBusy(b, false); }
         });
       });
       content.querySelectorAll('[data-remove-enrol]').forEach(function (b) {
         b.addEventListener('click', async function () {
           if (!(await confirmDlg('Remove this course from the student?', 'إزالة هذه الدورة من الطالب؟'))) return;
+          setBusy(b, true);
           try {
             await api.req('/api/staff/students/' + s.id + '/enrolments/' + b.dataset.removeEnrol, { method: 'DELETE' });
             toast(t('Course removed.', 'تمت إزالة الدورة.'), 'success');
             refreshCurrent();
-          } catch (err) { toast(err.message, 'error'); }
+          } catch (err) { toast(err.message, 'error'); setBusy(b, false); }
         });
       });
       var attForm = content.querySelector('[data-staff-attendance]');
@@ -1195,7 +1572,7 @@
       if (parts[0] !== 'student') return;
       var box = document.getElementById('staffStudentDetail');
       if (!box) return;
-      box.innerHTML = '<div class="card"><p class="muted">' + h(t('Loading the student record…', 'جارٍ تحميل سجل الطالب…')) + '</p></div>';
+      box.innerHTML = '<p class="muted small dash-loading-note" role="status">' + h(t('Loading the student record…', 'جارٍ تحميل سجل الطالب…')) + '</p><div class="dash-skeleton"></div><div class="dash-skeleton"></div>';
       try {
         var d = await api.req('/api/staff/students/' + encodeURIComponent(parts[1] || ''));
         box.innerHTML = staffStudentPage(d);
@@ -1442,21 +1819,27 @@
 
     labelTableCells();
     content.querySelectorAll('[data-confirm]').forEach(function (b) {
+      reserveBusyWidth(b, 'Confirming…', 'جارٍ التأكيد…');
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Confirming…', 'جارٍ التأكيد…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.confirm, { method: 'PUT', body: { status: 'confirmed' } }); toast(t('Booking confirmed.', 'تم تأكيد الحجز.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-reject]').forEach(function (b) {
+      reserveBusyWidth(b, 'Rejecting…', 'جارٍ الرفض…');
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Rejecting…', 'جارٍ الرفض…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.reject, { method: 'PUT', body: { status: 'rejected' } }); toast(t('Booking rejected.', 'تم رفض الحجز.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-approve]').forEach(function (b) {
+      reserveBusyWidth(b, 'Approving…', 'جارٍ الموافقة…');
       b.addEventListener('click', async function () {
+        setBusy(b, true, 'Approving…', 'جارٍ الموافقة…');
         try { await api.req('/api/enrolments/' + b.dataset.approve, { method: 'PUT', body: { status: 'active' } }); toast(t('Enrolment approved.', 'تمت الموافقة على التسجيل.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     var form = document.getElementById('adminCreateAccountForm');
@@ -1498,8 +1881,9 @@
       b.addEventListener('click', async function () {
         var id = b.dataset.saveCourse;
         var value = content.querySelector('[data-teacher-for="' + id + '"]').value;
+        setBusy(b, true);
         try { await api.req('/api/courses/' + id, { method: 'PUT', body: { teacher_id: value || null } }); toast(t('Teacher saved.', 'تم حفظ المعلم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-save-user]').forEach(function (b) {
@@ -1508,36 +1892,41 @@
         var body = { role: content.querySelector('[data-role-for="' + id + '"]').value };
         var pwInput = content.querySelector('[data-pw-for="' + id + '"]');
         if (pwInput.value) body.password = pwInput.value;
+        setBusy(b, true);
         try { await api.req('/api/admin/users/' + id, { method: 'PUT', body: body }); toast(t('User saved.', 'تم حفظ المستخدم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-booking]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this booking request? This cannot be undone.', 'حذف طلب الحجز هذا؟ لا يمكن التراجع عن هذا.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/admin/booking-requests/' + b.dataset.deleteBooking, { method: 'DELETE' }); toast(t('Booking deleted.', 'تم حذف الطلب.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-course]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this course? Enrolments for it stay as they are.', 'حذف هذه الدورة؟ التسجيلات فيها تبقى كما هي.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/courses/' + b.dataset.deleteCourse, { method: 'DELETE' }); toast(t('Course deleted.', 'تم حذف الدورة.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-delete-user]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Delete this user? Their enrolments are removed too.', 'حذف هذا المستخدم؟ تسجيلاته تُحذف أيضًا.'))) return;
+        setBusy(b, true, 'Deleting…', 'جارٍ الحذف…');
         try { await api.req('/api/admin/users/' + b.dataset.deleteUser, { method: 'DELETE' }); toast(t('User deleted.', 'تم حذف المستخدم.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-remove-enrolment]').forEach(function (b) {
       b.addEventListener('click', async function () {
         if (!(await confirmDlg('Remove this enrolment?', 'إزالة هذا التسجيل؟'))) return;
+        setBusy(b, true, 'Removing…', 'جارٍ الإزالة…');
         try { await api.req('/api/enrolments/' + b.dataset.removeEnrolment, { method: 'DELETE' }); toast(t('Enrolment removed.', 'تمت إزالة التسجيل.'), 'success'); refreshCurrent(); }
-        catch (err) { toast(err.message, 'error'); }
+        catch (err) { toast(err.message, 'error'); setBusy(b, false); }
       });
     });
     content.querySelectorAll('[data-booking-tab]').forEach(function (btn) {
